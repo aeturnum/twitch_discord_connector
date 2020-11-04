@@ -1,4 +1,7 @@
 defmodule TwitchDiscordConnector.Util.Expires do
+  @moduledoc """
+  Helpers to record and track how long until a date
+  """
   @key "expires"
 
   alias TwitchDiscordConnector.Util.H
@@ -12,7 +15,11 @@ defmodule TwitchDiscordConnector.Util.Expires do
     end
   end
 
-  def expires_in?(map, unit \\ :millisecond) do
+  def expires_in?(map, unit \\ :millisecond)
+
+  def expires_in?(nil, _unit), do: 0
+
+  def expires_in?(map, unit) do
     DateTime.diff(Map.get(map, @key) |> dt(), H.now(), unit)
     # don't return negative numbers
     |> max(0)

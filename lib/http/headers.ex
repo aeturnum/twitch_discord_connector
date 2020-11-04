@@ -1,4 +1,8 @@
 defmodule TwitchDiscordConnector.HTTP.Headers do
+  @moduledoc """
+  Helper methods to create headers for Plug
+  """
+
   def create_headers(conn, keywords) do
     headers = get_headers(keywords)
     put_headers(conn, headers)

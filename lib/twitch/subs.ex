@@ -1,11 +1,12 @@
 defmodule TwitchDiscordConnector.Twitch.Subs do
-  alias TwitchDiscordConnector.Twitch.Common
-  # alias TwitchDiscordConnector.Twitch.Subs
-  # alias TwitchDiscordConnector.Twitch.User
-  alias TwitchDiscordConnector.Util.Expires
-  alias TwitchDiscordConnector.JsonDB.TwitchDB
+  @moduledoc """
+  Helpers to subsribe to twitch updates on stream status
 
-  # @key "subs"
+  Todo: record if a subscription is confirmed.
+  """
+  alias TwitchDiscordConnector.Twitch.Common
+  alias TwitchDiscordConnector.Util.Expires
+  alias TwitchDiscordConnector.JsonDB.TwitchUserDB
 
   def subscribe(user_id, duration \\ 120) do
     # http -v POST https://api.twitch.tv/helix/webhooks/hub
@@ -30,16 +31,11 @@ defmodule TwitchDiscordConnector.Twitch.Subs do
     |> case do
       {:ok, _code, _} ->
         {:ok, %{"user_id" => user_id, "secret" => secret} |> Expires.expires_in(duration)}
-        # TwitchDiscordConnector.JsonDB.insert(
-        #   @key,
-        #   %{"user_id" => user_id, "secret" => secret} |> Expires.expires_in(duration),
-        #   key: user_id
-        # )
     end
   end
 
   def exists?(uid) do
-    case TwitchDB.load_sub(uid) do
+    case TwitchUserDB.load_sub(uid) do
       nil -> false
       _map -> true
     end
@@ -49,7 +45,7 @@ defmodule TwitchDiscordConnector.Twitch.Subs do
     do: sig_valid?(Integer.to_string(sub_id), headers, body)
 
   def sig_valid?(sub_id, headers, body) do
-    case TwitchDB.load_sub(sub_id) do
+    case TwitchUserDB.load_sub(sub_id) do
       %{"secret" => secret} ->
         with raw_bytes <- :crypto.hmac(:sha256, secret, body |> Poison.encode!()),
              pretty_bytes <- Base.encode16(raw_bytes) |> String.downcase(),
@@ -63,7 +59,7 @@ defmodule TwitchDiscordConnector.Twitch.Subs do
     end
   end
 
-  def str_list_get(list, key, default \\ nil) do
+  defp str_list_get(list, key, default \\ nil) do
     Enum.reduce_while(list, default, fn {k, value}, acc ->
       case k == key do
         true -> {:halt, value}
@@ -71,12 +67,6 @@ defmodule TwitchDiscordConnector.Twitch.Subs do
       end
     end)
   end
-
-  # def job_subscribe(sub_id, duration) do
-  #   Subs.subscribe(sub_id, duration) |> IO.inspect(label: "subscribe result")
-  #   :timer.sleep(500)
-  #   User.subs() |> IO.inspect(label: "user subs")
-  # end
 
   def id_from_topic("https://api.twitch.tv/helix/streams?user_id=" <> uid) do
     case Integer.parse(uid) do

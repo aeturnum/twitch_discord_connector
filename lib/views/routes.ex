@@ -1,17 +1,17 @@
 defmodule TwitchDiscordConnector.Views.Routes do
-  alias TwitchDiscordConnector.HTTP.Response
+  @moduledoc """
+  Route bodies
+  """
 
-  # alias TwitchDiscordConnector.Discord
+  # alias TwitchDiscordConnector.HTTP.Response
   alias TwitchDiscordConnector.Event
-  # alias TwitchDiscordConnector.Job.Manager
-  # alias TwitchDiscordConnector.Job.Timing
   alias TwitchDiscordConnector.Twitch.Subs
   alias TwitchDiscordConnector.Util.L
 
-  def status(conn, []) do
-    {:ok, %{"status" => "200 ok"}}
-    |> Response.send_response(conn)
-  end
+  # def status(conn, []) do
+  #   {:ok, %{"status" => "200 ok"}}
+  #   |> Response.send_response(conn)
+  # end
 
   def confirm_subscription(conn) do
     with conn <- Plug.Conn.fetch_query_params(conn),
@@ -19,6 +19,7 @@ defmodule TwitchDiscordConnector.Views.Routes do
          user_id <- Subs.id_from_topic(topic) do
       case Subs.exists?(user_id) do
         # must respond with plain body
+        # todo: note if a sub is confirmed or not
         true ->
           IO.puts("Confirming subscription to #{topic}")
           Plug.Conn.send_resp(conn, 200, challenge)
@@ -47,11 +48,13 @@ defmodule TwitchDiscordConnector.Views.Routes do
 
     case conn.body_params do
       %{"data" => []} ->
-        Event.emit(:twitch, :http, :stream, {:ended, user_id})
+        L.w(~s(Stream ended for #{inspect(user_id)}?))
+
+      # Event.broadcast({:twitch, :stream}, {:ended, user_id})
 
       %{"data" => [stream]} ->
         L.i(~s(Stream update for for #{stream["user_name"]}: #{stream["title"]}))
-        Event.emit(:twitch, :http, :stream, {:up, user_id, stream})
+        Event.broadcast({:twitch, :stream}, {:up, user_id, stream})
     end
 
     Plug.Conn.send_resp(conn, 200, "Thank you!")

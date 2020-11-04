@@ -1,53 +1,79 @@
 defmodule TwitchDiscordConnector.Discord do
+  @moduledoc """
+  The Discord module is used to handle all the discord interactions.any()
+
+  It's a bit messy right now, it does too much with the twitch api, but it's fine for now
+  """
+  @moduledoc since: "0.1.0"
+
   alias TwitchDiscordConnector.Util.H
-  alias TwitchDiscordConnector.Job.Manager
-  alias TwitchDiscordConnector.Discord
+  # alias TwitchDiscordConnector.Discord
   alias TwitchDiscordConnector.Twitch.Common
   alias TwitchDiscordConnector.Twitch.User
-  alias TwitchDiscordConnector.JsonDB.TwitchDB
+  alias TwitchDiscordConnector.JsonDB.AwsDB
   alias TwitchDiscordConnector.Util.L
 
-  # def start_job(user_id) do
-  #   Manager.start(
-  #     {:stream_notify, -1},
-  #     {&Discord.webhook/1, [user_id]},
-  #     # wait 3 minutes
-  #     # todo: calculate the delta from when the stream started
-  #     60 * 3 * 1000
-  #   )
-  # end
+  @doc """
+  Print the JSON that would be sent for twitch user with id `user_id` if they had a discord hook defined.
 
-  def webhook(user_id) do
-    # todo: check stream is still running lol
+  This is mostly used for testing and is meant to output to server logs
+
+  Returns A string of JSON usuially.
+  """
+  def fake_hook(user_id) do
+    case get_info(user_id) do
+      {:ok, {user, stream, game}} ->
+        stream_message("fake_thumbnail.jpg", user, stream, game)
+        |> Poison.encode!()
+        |> L.ins(label: "Simulated Payload")
+
+      {:error, message} ->
+        L.w("Fake hook error: #{message}")
+    end
+  end
+
+  @doc """
+  Send the pre-set JSON structure to the .
+
+  This is mostly used for testing and is meant to output to server logs
+
+  Returns A string of JSON usuially.
+  """
+  def webhook(user_id, hook) do
+    case get_info(user_id) do
+      {:ok, {user, stream, game}} ->
+        with {:ok, thumb_url} <- get_thumb(user, stream) do
+          Common.post(%{
+            url: hook,
+            body: stream_message(thumb_url, user, stream, game)
+          })
+        end
+
+      {:error, message} ->
+        L.w("Fake hook error: #{message}")
+    end
+  end
+
+  defp get_info(user_id) do
     {:ok, stream} = User.streams_id(user_id) |> L.ins(label: "stream")
 
     case stream do
       [] ->
-        L.w("Stream stopped for user #{user_id}")
+        {:error, "User #{inspect(user_id)} no longer streaming."}
 
       _ ->
         {:ok, game_info} = User.game_info(stream) |> L.ins(label: "game")
         {:ok, user_info} = User.info_id(user_id) |> L.ins(label: "user")
 
-        case id_hook?(user_id) do
-          true ->
-            Common.post(%{
-              url: id_hook(user_id),
-              body: stream_message(user_info, stream, game_info)
-            })
-
-          false ->
-            stream_message(user_info, stream, game_info)
-            |> Poison.encode!()
-            |> L.ins(label: "Simulated Payload")
-        end
+        {:ok, {user_info, stream, game_info}}
     end
   end
 
-  # stream_preview = streams['preview']['large']
+  @doc """
+  Rehost an image with a unique url based on the account name
 
-  # channel_name = three_six_channel['name']
-
+  Returns New url of thumbnail.
+  """
   def rehost_jpg(jpg_url, account_name) do
     name = image_name(account_name)
 
@@ -64,9 +90,9 @@ defmodule TwitchDiscordConnector.Discord do
           # acl
           acl: :public_read
         )
-        |> ExAws.request!(get_aws_secrets())
+        |> ExAws.request!(AwsDB.secrets())
         |> case do
-          %{status_code: 200} -> {:ok, "#{get_aws_baseurl()}/#{name}"}
+          %{status_code: 200} -> {:ok, "#{AwsDB.baseurl()}/#{name}"}
           other -> IO.puts("Upload failed: #{inspect(other)}")
         end
 
@@ -117,40 +143,24 @@ defmodule TwitchDiscordConnector.Discord do
     end
   end
 
+  @doc """
+  Generate a valid thumbnail url given a twitch thumbnail url template.
+
+  Returns Correctly formatted url with proper resolution.
+  """
   def thumbnail(url_template, {width, height}) do
     rep_map = %{"{width}" => "#{inspect(width)}", "{height}" => "#{inspect(height)}"}
     String.replace(url_template, Map.keys(rep_map), fn s -> Map.get(rep_map, s, s) end)
   end
 
-  def id_hook(id) do
-    TwitchDB.load_hook(id)
-    |> case do
-      nil -> ""
-      hook -> hook
-    end
+  defp get_thumb(%{"login" => l}, %{"thumbnail_url" => turl}) do
+    turl |> thumbnail({640, 360}) |> rehost_jpg(l)
   end
 
-  def id_hook?(id) do
-    id_hook(id)
-    |> case do
-      "" -> false
-      _ -> true
-    end
-  end
-
-  defp get_thumb(%{"id" => id, "login" => l}, %{"thumbnail_url" => turl}) do
-    case id_hook?(id) do
-      true -> turl |> thumbnail({640, 360}) |> rehost_jpg(l)
-      _ -> {:ok, "fake_thumb"}
-    end
-  end
-
-  defp stream_message(user_info, stream_info, game_info) do
+  defp stream_message(thumb_url, user_info, stream_info, game_info) do
     with login <- Map.get(user_info, "login"),
          started <- format_time_from_str(Map.get(stream_info, "started_at")),
-         channel_url <- channel(login),
-         {:ok, thumb_url} <- get_thumb(user_info, stream_info) do
-      # streams['created_at'].strftime("%m/%d/%Y, %H:%M:%S")
+         channel_url <- channel(login) do
       %{
         content: Map.get(stream_info, "title"),
         embeds: [
@@ -179,18 +189,6 @@ defmodule TwitchDiscordConnector.Discord do
           }
         ]
       }
-    end
-  end
-
-  defp get_aws_baseurl() do
-    TwitchDiscordConnector.JsonDB.get("digital_ocean_aws")
-    |> Map.get("base_url")
-  end
-
-  defp get_aws_secrets() do
-    case TwitchDiscordConnector.JsonDB.get("digital_ocean_aws") do
-      %{"key" => key, "secret" => secret} -> [access_key_id: key, secret_access_key: secret]
-      _ -> []
     end
   end
 end

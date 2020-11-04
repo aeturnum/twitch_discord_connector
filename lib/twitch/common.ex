@@ -1,4 +1,8 @@
 defmodule TwitchDiscordConnector.Twitch.Common do
+  @moduledoc """
+  Http methods to make requests
+  """
+
   # http -v POST https://id.twitch.tv/oauth2/token
   # client_id=... client_secret=... grant_type=client_credentials scope=''
 

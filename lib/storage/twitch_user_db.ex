@@ -1,12 +1,27 @@
-defmodule TwitchDiscordConnector.JsonDB.TwitchDB do
+defmodule TwitchDiscordConnector.JsonDB.TwitchUserDB do
+  @moduledoc """
+  Helpers for putting user data into the json file or getting it out
+
+  Future use will probably cut down the amount of information stored.
+  """
   # Common method for saving and getting twitch data
   defstruct uid: "", info: nil, hook: nil, sub: nil, state: %{}
 
-  alias TwitchDiscordConnector.JsonDB.TwitchDB
+  alias TwitchDiscordConnector.JsonDB.TwitchUserDB
   alias TwitchDiscordConnector.JsonDB
   alias TwitchDiscordConnector.Util.H
 
   @dbkey "twitch_users"
+
+  @doc """
+  Get all user ids stored under the global key
+
+  Returns `list` of `binaries` of numbers.
+  """
+  def user_ids() do
+    JsonDB.get(@dbkey, %{})
+    |> Map.keys()
+  end
 
   def save_user(user) do
     JsonDB.insert(
@@ -23,10 +38,15 @@ defmodule TwitchDiscordConnector.JsonDB.TwitchDB do
     user
   end
 
+  @doc """
+  Load a user with the given `uid`
+
+  Returns a `TwitchUserDB` structure with the user data
+  """
   def load_user(uid) do
     with uid <- H.str(uid),
          user_map <- JsonDB.get(@dbkey, %{}) |> Map.get(uid, %{}) do
-      %TwitchDB{
+      %TwitchUserDB{
         uid: uid,
         info: Map.get(user_map, "info", nil),
         hook: Map.get(user_map, "hook", nil),
@@ -46,7 +66,7 @@ defmodule TwitchDiscordConnector.JsonDB.TwitchDB do
   #   end
   # end
 
-  defimpl String.Chars, for: TwitchDB do
+  defimpl String.Chars, for: TwitchUserDB do
     def to_string(s), do: "#{state_name(s)}#{state_flags(s)}"
     def state_name(%{uid: uid, info: nil}), do: "TUser[#{uid}]"
     def state_name(%{uid: uid, info: %{"display_name" => d}}), do: "TU[#{d}(#{uid})]"

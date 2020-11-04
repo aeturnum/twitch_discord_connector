@@ -1,4 +1,8 @@
 defmodule TwitchDiscordConnector.HTTP.Response do
+  @moduledoc """
+  Helper methods to return results over plug
+  """
+
   alias TwitchDiscordConnector.HTTP.Headers
 
   def send_response({:error, {code, json}}, conn) do

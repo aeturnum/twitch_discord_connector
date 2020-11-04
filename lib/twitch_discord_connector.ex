@@ -16,35 +16,19 @@ defmodule TwitchDiscordConnector do
 
   defp children(:test) do
     [
-      {TwitchDiscordConnector.JsonDB, [path: "testing.json", wipe: true]},
+      {TwitchDiscordConnector.JsonDB,
+       [path: "testing.json", wipe: true, image: "test_image_db.json"]},
       {TwitchDiscordConnector.Event, []}
     ]
   end
 
   defp children(_) do
-    # Task.start(fn ->
-    #   :timer.sleep(100)
-    #   IO.inspect(TwitchDiscordConnector.Discord.id_hook?(35_634_557), label: "hook?")
-    #   IO.inspect(TwitchDiscordConnector.Discord.id_hook(35_634_557), label: "hook?")
-    # end)
-
     [
       {TwitchDiscordConnector.JsonDB, [path: "db.json"]},
-      {TwitchDiscordConnector.Event,
-       [
-         {TwitchDiscordConnector.Event.TwitchUser, 35_634_557},
-         {TwitchDiscordConnector.Event.TwitchUser, 503_254}
-       ]},
+      {TwitchDiscordConnector.Event, [{TwitchDiscordConnector.Event.Loader, {}}]},
       {
         Plug.Cowboy,
-        scheme: :https,
-        plug: TwitchDiscordConnector.Views.Router,
-        options: [
-          port: 443,
-          certfile: "/etc/letsencrypt/live/twitch.naturecultur.es/cert.pem",
-          keyfile: "/etc/letsencrypt/live/twitch.naturecultur.es/privkey.pem",
-          cacertfile: "/etc/letsencrypt/live/twitch.naturecultur.es/chain.pem"
-        ]
+        scheme: :http, plug: TwitchDiscordConnector.Views.Router, options: [port: 4000]
       }
     ]
   end

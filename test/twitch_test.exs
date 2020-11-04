@@ -10,10 +10,14 @@ defmodule TwitchDiscordConnectorTest.Twitch do
     TwitchDiscordConnector.Discord.image_name("test") |> IO.inspect()
   end
 
-  test "rehost" do
-    # "https://static-cdn.jtvnw.net/previews-ttv/live_user_attndotcom-{width}x{height}.jpg"
-    # |> TwitchDiscordConnector.Twitch.Helpers.thumbnail({640, 360})
-    # |> TwitchDiscordConnector.Discord.rehost_jpg("test_account")
+  test "user info" do
+    {:ok, user} = TwitchDiscordConnector.Twitch.User.info_id(503_254)
+
+    assert user["id"] == "503254"
+  end
+
+  test "fake webhook" do
+    TwitchDiscordConnector.Discord.fake_hook("503254") |> IO.inspect()
   end
 
   test "signature" do
@@ -35,17 +39,16 @@ defmodule TwitchDiscordConnectorTest.Twitch do
 
     parsed_body = %{"data" => []}
 
-    TwitchDiscordConnector.JsonDB.TwitchDB.save_user(%TwitchDiscordConnector.JsonDB.TwitchDB{
-      uid: "503254",
-      sub: %{
-        "user_id" => "503254",
-        "secret" => "wR8FRvoKebeV",
-        "expires" => "2020-10-19T16:58:38.400707Z"
+    TwitchDiscordConnector.JsonDB.TwitchUserDB.save_user(
+      %TwitchDiscordConnector.JsonDB.TwitchUserDB{
+        uid: "503254",
+        sub: %{
+          "user_id" => "503254",
+          "secret" => "wR8FRvoKebeV",
+          "expires" => "2020-10-19T16:58:38.400707Z"
+        }
       }
-    })
-
-    # TwitchDiscordConnector.JsonDB.TwitchDB.set("subs", sub_info)
-    # TwitchDiscordConnector.JsonDB.TwitchDB.save_user()
+    )
 
     assert TwitchDiscordConnector.Twitch.Subs.sig_valid?(503_254, headers, parsed_body) == true
   end

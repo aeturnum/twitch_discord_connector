@@ -1,4 +1,8 @@
 defmodule TwitchDiscordConnector.HTTP.Logger do
+  @moduledoc """
+  Log requests with the info I want
+  """
+
   require Logger
   alias Plug.Conn
   @behaviour Plug

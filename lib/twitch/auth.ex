@@ -1,57 +1,54 @@
 defmodule TwitchDiscordConnector.Twitch.Auth do
+  @moduledoc """
+  Twitch helpers to manage get auth headers based on store secrets.
+  """
+
   # http -v POST https://id.twitch.tv/oauth2/token
   # client_id=... client_secret=... grant_type=client_credentials scope=''
 
+  alias TwitchDiscordConnector.JsonDB.TwitchApiDB
   alias TwitchDiscordConnector.Twitch.Common
-  alias TwitchDiscordConnector.Util.Expires
+  alias TwitchDiscordConnector.Util.L
 
-  @key "auth"
-
+  @doc """
+  Get auth header or, if we need to renew our header, get it.
+  """
   def auth do
-    case TwitchDiscordConnector.JsonDB.get(@key) do
-      nil ->
-        refresh_auth().header
-
-      auth = %{"header" => h} ->
-        case Expires.expired?(auth) do
-          true -> refresh_auth().header
-          false -> h
-        end
+    case TwitchApiDB.auth() do
+      nil -> refresh_auth() |> Map.get("header")
+      creds -> creds
     end
     |> headers()
   end
 
-  defp headers(auth_header) do
-    client_id = Map.get(secrets(), "client_id")
-    [{"Authorization", auth_header}, {"Client-Id", client_id}]
+  defp headers(header) do
+    client_id = Map.get(TwitchApiDB.secrets(), "client_id")
+    [{"Authorization", header}, {"Client-Id", client_id}]
   end
 
+  @doc """
+  Method that actually does the request to get a new bearer token.
+
+  """
   def refresh_auth do
-    IO.puts("Refreshing Auth")
+    L.i("Refreshing Auth")
 
     Common.post(%{
       url: "https://id.twitch.tv/oauth2/token",
       body:
         Map.merge(
-          secrets(),
+          TwitchApiDB.secrets(),
           %{grant_type: "client_credentials", scope: ""}
         )
     })
     |> case do
-      {:ok, _, %{"access_token" => token, "expires_in" => lifetime}} ->
-        TwitchDiscordConnector.JsonDB.set(
-          @key,
-          %{"header" => "Bearer #{token}"} |> Expires.expires_in(lifetime)
-        )
-
-        TwitchDiscordConnector.JsonDB.get(@key)
+      {:ok, _, info} ->
+        TwitchApiDB.set_auth(info)
 
       {atm, code, info} ->
-        IO.puts("Got error on refreshing auth: {#{inspect(atm)}, #{code}, #{inspect(info)}}")
-    end
-  end
+        L.e("Got error on refreshing auth: {#{inspect(atm)}, #{code}, #{inspect(info)}}")
 
-  defp secrets do
-    TwitchDiscordConnector.JsonDB.get("twitch_creds", %{})
+        %{}
+    end
   end
 end

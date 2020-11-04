@@ -1,4 +1,9 @@
 defmodule TwitchDiscordConnector.Views.Router do
+  @moduledoc """
+  Server router
+
+  todo: save body for checking body signature
+  """
   alias TwitchDiscordConnector.HTTP.Static
   alias TwitchDiscordConnector.Views.Routes
   use Plug.Router

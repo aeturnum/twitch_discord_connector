@@ -1,8 +1,6 @@
 defmodule TwitchDiscordConnector.Event.TwitchUser do
-  alias TwitchDiscordConnector.JsonDB.TwitchDB
+  alias TwitchDiscordConnector.JsonDB.TwitchUserDB
 
-  alias TwitchDiscordConnector.Discord
-  alias TwitchDiscordConnector.Job.Manager
   alias TwitchDiscordConnector.Twitch
   alias TwitchDiscordConnector.Util.H
   alias TwitchDiscordConnector.Util.Expires
@@ -10,8 +8,8 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
 
   # opts = {info, flags = %{}}
   def init(user_id) do
-    TwitchDB.load_user(user_id)
-    |> log_state("init")
+    TwitchUserDB.load_user(user_id)
+    # |> log_state("init")
   end
 
   def channel(), do: :twitch_user
@@ -21,10 +19,9 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
   ###############
 
   # startup event
-  def handle_event({:event, :added, _}, {_, my_id}, s) do
-    # Manager.start({:user_info, d}, {&Twitch.User.info_id/1, [s.uid]})
-    # Manager.start({:list_subs, d}, {&Twitch.User.subs/0, []})
-    maybe_get_info(s, my_id)
+  def handle_event({:send, :event}, {:added, _}, s) do
+    {[], s}
+    |> maybe_get_info()
     |> schedule_sub_and_return()
   end
 
@@ -43,103 +40,86 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
   #    "type" => "",
   #    "view_count" => 632209
   #
-  def handle_event({:job, :user_info, info}, {s, m}, state) when s == m do
+  @doc """
+  Save information for this twitch user.
+  """
+  def handle_event({:send, :me}, {:user_info, info}, state) do
     {
       :ok,
       unwrap_result(info, state, :user_info, fn uinfo ->
         %{state | info: %{} |> H.grab_keys(uinfo, ["login", "display_name", "description"])}
-        |> TwitchDB.save_user()
+        |> TwitchUserDB.save_user()
       end)
     }
   end
 
-  def handle_event({:job, :subscribe, info}, {s, m}, state) when s == m do
-    {
-      :ok,
-      unwrap_result(info, state, :subscribe, fn sub ->
-        %{state | sub: sub}
-        |> TwitchDB.save_user()
-      end)
-    }
+  @doc """
+  Save subscription information
+
+  todo: record if the subscription has been confirmed or not.
+  """
+  def handle_event({:send, :me}, {:subscribe, info}, state) do
+    with sub <- unwrap_result(info, state, :subscribe),
+         new_state <- %{state | sub: sub} |> TwitchUserDB.save_user() do
+      {sub_later(new_state), new_state}
+    end
+  end
+
+  ####################
+  ## Delay Handles ###
+  ####################
+
+  @doc """
+  Save information for this twitch user.
+  """
+  def handle_event({:send, :me}, {:delay_started, {:sub_delay, _}}, s) do
+    L.d("#{s}: Ignoring notification about sub_delay handle")
+    {:ok, s}
   end
 
   ######################
   ## Other Callbacks ###
   ######################
 
-  # Event.emit(:twitch, :stream, {:ended, %{uid: user_id}})
-
-  def handle_event({:twitch, :stream, {:ended, eid}}, _, s = %{uid: uid}) when eid == uid do
-    L.d("#{s}: Got :stream :ended notification")
-    {:ok, s}
-  end
-
-  #   {:ok,
-  #  %{
-  #    "game_id" => "490655",
-  #    "id" => "40139934782",
-  #    "language" => "en",
-  #    "started_at" => "2020-10-18T22:54:53Z",
-  #    "tag_ids" => ["6ea6bca4-4712-4ab9-a906-e3336a9d8039"],
-  #    "thumbnail_url" => "https://static-cdn.jtvnw.net/previews-ttv/live_user_themystic7hwd-{width}x{height}.jpg",
-  #    "title" => "SHUNDO GIRATINA HUNTING!",
-  #    "type" => "live",
-  #    "user_id" => "171122649",
-  #    "user_name" => "theMYSTIC7hwd",
-  #    "viewer_count" => 864
-  #  }}
-  def handle_event({:twitch, :stream, {:up, eid, info}}, _, s = %{uid: uid}) when eid == uid do
-    with stream_timestamp <- info["started_at"],
-         do_disc_hook <- {:delay, 60 * 3 * 1000, :disc_hook},
-         state_with_stream <- %{s | state: Map.put(s.state, "started_at", stream_timestamp)} do
-      case Map.get(s, "last_stream", nil) do
-        nil ->
-          {do_disc_hook, state_with_stream}
-
-        stream_dt ->
-          case stream_dt == stream_timestamp do
-            true -> {:ok, s}
-            false -> {do_disc_hook, state_with_stream}
-          end
-      end
-    end
-  end
-
-  def handle_event({:twitch_user, :disc_hook, _}, {src, d}, s) when src == d do
-    Manager.start({:stream_notify, d}, {&Discord.webhook/1, [s.uid]})
-    {:ok, s}
-  end
-
-  def handle_event({:twitch_user, :do_sub, _}, {src, d}, s) when src == d do
-    Manager.start({:subscribe, d}, {&Twitch.Subs.subscribe/2, [s.uid, 60 * 60 * 8]})
-    {:ok, s}
-  end
-
   # default
-  def handle_event(_, _, state) do
-    {:ok, state}
-  end
+  def handle_event(_), do: :ignore
 
   ###############
   ## Helpers ####
   ###############
 
-  defp maybe_get_info(s = %{info: nil}, my_id) do
-    Manager.start({:user_info, my_id}, {&Twitch.User.info_id/1, [s.uid]})
-    s
+  defp maybe_get_info({a, s = %{info: nil}}) do
+    {
+      [{:job, :me, :user_info, info_call(s)} | a],
+      s
+    }
   end
 
-  defp maybe_get_info(s, _), do: s
+  defp maybe_get_info({a, s}), do: {a, s}
 
-  defp schedule_sub_and_return(s = %{sub: nil}) do
-    {{:emit, :do_sub}, s}
+  defp schedule_sub_and_return({a, s = %{info: nil}}) do
+    {
+      [sub_job(s) | a],
+      s
+    }
   end
 
-  defp schedule_sub_and_return(s = %{sub: s_info}) do
-    {{:delay, Expires.expires_in?(s_info), :do_sub}, s}
+  defp schedule_sub_and_return({a, s}) do
+    {
+      [sub_later(s) | a],
+      s
+    }
   end
 
-  defp unwrap_result(result, state, tag, func) do
+  defp sub_later(s = %{sub: s_i}), do: {:in, :sub_delay, Expires.expires_in?(s_i), sub_job(s)}
+  defp sub_job(s), do: {:job, :me, :subscribe, sub_call(s)}
+  # defp do_disc_hook(s), do: {:in, :disc_delay, 60 * 1000 * 3, {:job, :me, :hook, disc_call(s)}}
+
+  defp info_call(s), do: {&Twitch.User.info_id/1, [s.uid]}
+  defp sub_call(s), do: {&Twitch.Subs.subscribe/2, [s.uid, 60 * 60 * 8]}
+  # defp disc_call(s), do: {&Discord.webhook/1, [s.uid]}
+
+  defp unwrap_result(result, state, tag, func \\ fn x -> x end) do
     case result do
       {:ok, good_info} ->
         func.(good_info)
@@ -151,6 +131,7 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
           }"
         )
 
+        # return old state
         state
     end
   end

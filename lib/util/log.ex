@@ -1,4 +1,9 @@
 defmodule TwitchDiscordConnector.Util.L do
+  @moduledoc """
+  Logging helpers
+
+  Todo: expand significantly and add lots of formatting options
+  """
   require Logger
   # Process.info(self(), :current_stacktrace)
 

@@ -1,4 +1,7 @@
 defmodule TwitchDiscordConnector.HTTP.Static do
+  @moduledoc """
+  Helper methods to serve static files.
+  """
   alias TwitchDiscordConnector.HTTP.Headers
 
   @static_root [File.cwd!(), "priv"]

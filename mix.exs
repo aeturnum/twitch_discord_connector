@@ -4,10 +4,17 @@ defmodule TwitchDiscordConnector.MixProject do
   def project do
     [
       app: :twitch_discord_connector,
-      version: "0.1.0",
+      version: "0.1.1",
       elixir: "~> 1.10",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      test_coverage: [tool: ExCoveralls],
+      preferred_cli_env: [
+        coveralls: :test,
+        "coveralls.detail": :test,
+        "coveralls.post": :test,
+        "coveralls.html": :test
+      ]
     ]
   end
 
@@ -24,7 +31,7 @@ defmodule TwitchDiscordConnector.MixProject do
   defp deps do
     [
       # Oauth library
-      {:oauth2, "~> 2.0"},
+      # {:oauth2, "~> 2.0"},
       # JSON library
       {:poison, "~> 4.0"},
       # HTTP request library that uses :poison
@@ -33,11 +40,13 @@ defmodule TwitchDiscordConnector.MixProject do
       {:plug_cowboy, "~> 2.4.0"},
       # CORS support
       {:cors_plug, "~> 2.0.2"},
-      # all this for s3 access
+      # all this for s3 access :'(
       {:ex_aws, "~> 2.1"},
       {:ex_aws_s3, "~> 2.0"},
       {:hackney, "~> 1.15"},
-      {:sweet_xml, "~> 0.6"}
+      {:sweet_xml, "~> 0.6"},
+      # test area
+      {:excoveralls, "~> 0.13", only: :test}
     ]
   end
 end
