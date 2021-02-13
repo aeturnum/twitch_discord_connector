@@ -5,7 +5,7 @@ This should generally be available to everyone, though you may need to bring you
 
 ## Libraries Used
 
-I prefer a lower number of dependencies so I've included as few libraries as possible. Unfortunately s3 required 4(!) libraries to get done, but 90% of the code is interacting with `:poison` / `:httpoison` / `:plug_cowboy`. If you're interested in what a bare plug server looks like and how it does things, this might be interesting to you.
+I prefer a lower number of dependencies so I've included as few libraries as possible. Unfortunately s3 required 4(!) libraries to work, but 90% of the code is interacting with `:poison` / `:httpoison` / `:plug_cowboy`. If you're interested in what directly interacting using plug looks like, this might be interesting to you.
 
 ## Setup
 
