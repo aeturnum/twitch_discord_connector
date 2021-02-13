@@ -40,12 +40,19 @@ defmodule TwitchDiscordConnector.Discord do
   Returns A string of JSON usuially.
   """
   def webhook(user_id, hook) do
+    L.i("Starting real webhook!")
+
     case get_info(user_id) do
       {:ok, {user, stream, game}} ->
-        with {:ok, thumb_url} <- get_thumb(user, stream) do
+        with {:ok, thumb_url} <- get_thumb(user, stream),
+             message <- stream_message(thumb_url, user, stream, game) do
+          L.i("Sending payload to discord: #{Poison.encode!(message)}")
+
           Common.post(%{
             url: hook,
-            body: stream_message(thumb_url, user, stream, game)
+            body: message,
+            # print the args and the response
+            print: true
           })
         end
 
@@ -77,8 +84,7 @@ defmodule TwitchDiscordConnector.Discord do
   def rehost_jpg(jpg_url, account_name) do
     name = image_name(account_name)
 
-    Common.get(%{url: jpg_url})
-    |> case do
+    case Common.get(%{url: jpg_url}) do
       {:ok, _, image_binary} ->
         ExAws.S3.put_object(
           # bucket name
@@ -92,12 +98,18 @@ defmodule TwitchDiscordConnector.Discord do
         )
         |> ExAws.request!(AwsDB.secrets())
         |> case do
-          %{status_code: 200} -> {:ok, "#{AwsDB.baseurl()}/#{name}"}
-          other -> IO.puts("Upload failed: #{inspect(other)}")
+          %{status_code: 200} ->
+            with new_url <- "#{AwsDB.baseurl()}/#{name}" do
+              L.i("Rehosted url(#{inspect(jpg_url)}) -> #{new_url}")
+              {:ok, new_url}
+            end
+
+          other ->
+            L.e("Rehosting url(#{inspect(jpg_url)}) -  Upload failed: #{inspect(other)}")
         end
 
       other ->
-        IO.puts("Rehosting failed: #{inspect(other)}")
+        L.e("Rehosting url(#{inspect(jpg_url)}) - get failed: #{inspect(other)}")
     end
   end
 

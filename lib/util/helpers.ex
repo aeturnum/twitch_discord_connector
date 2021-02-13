@@ -1,4 +1,8 @@
 defmodule TwitchDiscordConnector.Util.H do
+  @moduledoc """
+  Random Helpers
+  """
+
   # https://stackoverflow.com/questions/32001606/how-to-generate-a-random-url-safe-string-with-elixir
   def random_string(length) do
     :crypto.strong_rand_bytes(length) |> Base.url_encode64() |> binary_part(0, length)
