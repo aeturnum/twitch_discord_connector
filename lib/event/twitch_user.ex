@@ -46,7 +46,7 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
   def handle_event({:send, :me}, {:user_info, info}, state) do
     {
       :ok,
-      unwrap_result(info, state, :user_info, fn uinfo ->
+      unwrap_result(info, state, fn uinfo ->
         %{state | info: %{} |> H.grab_keys(uinfo, ["login", "display_name", "description"])}
         |> TwitchUserDB.save_user()
       end)
@@ -59,10 +59,21 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
   todo: record if the subscription has been confirmed or not.
   """
   def handle_event({:send, :me}, {:subscribe, info}, state) do
-    with sub <- unwrap_result(info, state, :subscribe),
-         new_state <- %{state | sub: sub} |> TwitchUserDB.save_user() do
-      {sub_later(new_state), new_state}
-    end
+    unwrap_result(info, state, %{
+      :ok => fn sub ->
+        with new_state <- %{state | sub: sub} |> TwitchUserDB.save_user() do
+          {sub_later(new_state), new_state}
+        end
+      end,
+      :error => fn error_info ->
+        {sub_later(state, 30 * 1000), state}
+      end
+    })
+
+    # with sub <- unwrap_result(info, state),
+    #      new_state <- %{state | sub: sub} |> TwitchUserDB.save_user() do
+    #   {sub_later(new_state), new_state}
+    # end
   end
 
   ####################
@@ -111,7 +122,10 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
     }
   end
 
-  defp sub_later(s = %{sub: s_i}), do: {:in, :sub_delay, Expires.expires_in?(s_i), sub_job(s)}
+  # delay is in ms
+  defp sub_later(s = %{sub: s_i}, delay \\ 0),
+    do: {:in, :sub_delay, Expires.expires_in?(s_i) + delay, sub_job(s)}
+
   defp sub_job(s), do: {:job, :me, :subscribe, sub_call(s)}
   # defp do_disc_hook(s), do: {:in, :disc_delay, 60 * 1000 * 3, {:job, :me, :hook, disc_call(s)}}
 
@@ -119,17 +133,16 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
   defp sub_call(s), do: {&Twitch.Subs.subscribe/2, [s.uid, 60 * 60 * 8]}
   # defp disc_call(s), do: {&Discord.webhook/1, [s.uid]}
 
-  defp unwrap_result(result, state, tag, func \\ fn x -> x end) do
+  defp unwrap_result(result, state, func_map \\ %{}) do
+    func_map = Map.put_new(func_map, :ok, fn x -> x end)
+
     case result do
-      {:ok, good_info} ->
-        func.(good_info)
+      {atom, arg} ->
+        func = func_map[atom]
+        func.(arg)
 
       _ ->
-        L.e(
-          "#{state}: Unexpected response from #{inspect(tag)} call: #{
-            inspect(result, pretty: true)
-          }"
-        )
+        L.e("#{state}: Unexpected response: #{inspect(result, pretty: true)}")
 
         # return old state
         state

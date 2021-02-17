@@ -12,3 +12,5 @@ config :ex_aws, :s3,
   scheme: "https://",
   host: "sfo2.digitaloceanspaces.com",
   region: "sfo2"
+
+config :logger, :console, format: {TwitchDiscordConnector.HTTP.Logger, :format}
