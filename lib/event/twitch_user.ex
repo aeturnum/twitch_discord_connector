@@ -46,10 +46,16 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
   def handle_event({:send, :me}, {:user_info, info}, state) do
     {
       :ok,
-      unwrap_result(info, state, fn uinfo ->
-        %{state | info: %{} |> H.grab_keys(uinfo, ["login", "display_name", "description"])}
-        |> TwitchUserDB.save_user()
-      end)
+      unwrap_result(info, state, %{
+        :ok => fn uinfo ->
+          %{state | info: %{} |> H.grab_keys(uinfo, ["login", "display_name", "description"])}
+          |> TwitchUserDB.save_user()
+        end,
+        :error => fn err ->
+          L.e("Error getting user info: #{inspect(err)}")
+          {[], state} |> maybe_get_info()
+        end
+      })
     }
   end
 
@@ -66,6 +72,7 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
         end
       end,
       :error => fn error_info ->
+        L.e("Error subbing: #{inspect(error_info)}")
         {sub_later(state, 30 * 1000), state}
       end
     })
