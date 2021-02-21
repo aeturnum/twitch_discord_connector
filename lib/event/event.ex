@@ -90,7 +90,7 @@ defmodule TwitchDiscordConnector.Event do
   Returns `:ok`
   """
   @spec delay(atom(), integer(), action(), {addr(), atom()}) :: :ok
-  defp delay(name, ms, action, {from, channel}) do
+  def delay(name, ms, action, {from, channel}) do
     GenServer.cast(@name, {:delay, name, ms, action, {from, channel}})
   end
 
@@ -111,7 +111,7 @@ defmodule TwitchDiscordConnector.Event do
 
   Returns `:ok`
   """
-  defp cancel_delay(delay_id) do
+  def cancel_delay(delay_id) do
     GenServer.cast(@name, {:cancel_delay, delay_id})
   end
 

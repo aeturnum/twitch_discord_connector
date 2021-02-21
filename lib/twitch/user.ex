@@ -36,6 +36,7 @@ defmodule TwitchDiscordConnector.Twitch.User do
       # o h n o
       other ->
         IO.puts("Failed to fetch user(#{params}) info for some reason: #{inspect(other)}")
+        {:error, other}
     end
   end
 
@@ -60,6 +61,7 @@ defmodule TwitchDiscordConnector.Twitch.User do
       # o h n o
       other ->
         IO.puts("Failed to fetch game(#{id}) info for some reason: #{inspect(other)}")
+        {:error, other}
     end
   end
 
@@ -100,6 +102,7 @@ defmodule TwitchDiscordConnector.Twitch.User do
       # o h n o
       other ->
         IO.puts("Failed to fetch stream (#{params}) info for some reason: #{inspect(other)}")
+        {:error, other}
     end
   end
 

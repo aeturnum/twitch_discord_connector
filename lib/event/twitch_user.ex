@@ -119,7 +119,9 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
   defp sub_call(s), do: {&Twitch.Subs.subscribe/2, [s.uid, 60 * 60 * 8]}
   # defp disc_call(s), do: {&Discord.webhook/1, [s.uid]}
 
-  defp unwrap_result(result, state, tag, func \\ fn x -> x end) do
+  defp unwrap_result(result, state, func_map) do
+    func_map = Map.put_new(func_map, :ok, fn x -> x end)
+
     case result do
       {:ok, good_info} ->
         func.(good_info)
@@ -136,10 +138,10 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
     end
   end
 
-  defp log_state(s, label \\ "") do
-    L.ins(s, label: label)
-    s
-  end
+  # defp log_state(s, label \\ "") do
+  #   L.ins(s, label: label)
+  #   s
+  # end
 
   # defp s_s(s), do: "#{state_name(s)}#{state_flags(s)}"
   # defp state_name(%{uid: uid, info: nil}), do: "TUser[#{uid}]"

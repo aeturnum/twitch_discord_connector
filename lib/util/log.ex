@@ -42,7 +42,7 @@ defmodule TwitchDiscordConnector.Util.L do
   #       end
   #     )
 
-  defp split_mod(mod), do: mod |> Atom.to_string() |> String.split(".")
+  # defp split_mod(mod), do: mod |> Atom.to_string() |> String.split(".")
 
   # defp update_stack_height() do
   #   with base <- base_mod(mod) do
@@ -67,7 +67,7 @@ defmodule TwitchDiscordConnector.Util.L do
   defp trace_line({mod, atom_name, arity, [file: _path, line: line]}),
     do: "    #{line}| #{mod}.#{atom_name}/#{arity}\n"
 
-  defp loc_name({_, atom_name, _, [file: path, line: line]}),
+  defp loc_name({_, _atom_name, _, [file: path, line: line]}),
     do: "[#{Path.basename(path)}::#{line}]"
 
   defp stack() do
@@ -98,6 +98,8 @@ defmodule TwitchDiscordConnector.Util.L do
 
   # todo: error
   def ins(obj, opts \\ []) do
+    opts = to_ins_list(opts)
+
     "#{inspect(obj, Keyword.merge([pretty: true], opts))}"
     |> do_i_label(opts)
     |> do_i_prefix(opts)
@@ -105,6 +107,9 @@ defmodule TwitchDiscordConnector.Util.L do
 
     obj
   end
+
+  defp to_ins_list(s) when is_binary(s), do: [label: s]
+  defp to_ins_list(o) when is_list(o), do: o
 
   defp do_i_label(s, opts) do
     case Keyword.get(opts, :label, nil) do

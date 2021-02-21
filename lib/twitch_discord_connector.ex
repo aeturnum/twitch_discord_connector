@@ -1,35 +1,48 @@
 defmodule TwitchDiscordConnector do
   use Application
 
+  alias TwitchDiscordConnector.Util.L
+
   def init(:ok) do
   end
 
   def start(_type, _args) do
-    import Supervisor.Spec, warn: false
+    import Supervisor.Spec,
+      warn: false
 
-    Supervisor.start_link(
-      children(Application.get_env(:twitch_discord_connector, :environment)),
-      strategy: :one_for_one,
-      name: TwitchDiscordConnector.Supervisor
-    )
+    with env <- Application.get_env(:twitch_discord_connector, :environment),
+         {:ok, pid} <- start_internal_processes() do
+      # Call all startup tasks now that the superviser has been started
+      TwitchDiscordConnector.Startup.startup_tasks()
+      # start final layer
+      Enum.each(external_processes(env), fn child -> Supervisor.start_child(pid, child) end)
+      {:ok, pid}
+    else
+      other ->
+        L.e("Supervisor failed to start: #{inspect(other)}")
+    end
   end
 
-  defp children(:test) do
+  defp start_internal_processes() do
     [
-      {TwitchDiscordConnector.JsonDB,
-       [path: "testing.json", wipe: true, image: "test_image_db.json"]},
-      {TwitchDiscordConnector.Event, []}
+      {TwitchDiscordConnector.JsonDB, settings(:init_jsondb)},
+      {TwitchDiscordConnector.Event, settings(:init_event)},
+      {TwitchDiscordConnector.Template, settings(:init_template)},
+      {TwitchDiscordConnector.Template.SrcServer, settings(:init_srcserver)}
     ]
+    |> Supervisor.start_link(strategy: :one_for_one, name: TwitchDiscordConnector.Supervisor)
   end
 
-  defp children(_) do
+  defp external_processes(:test), do: []
+
+  defp external_processes(_) do
     [
-      {TwitchDiscordConnector.JsonDB, [path: "db.json"]},
-      {TwitchDiscordConnector.Event, [{TwitchDiscordConnector.Event.Loader, {}}]},
       {
         Plug.Cowboy,
         scheme: :http, plug: TwitchDiscordConnector.Views.Router, options: [port: 4000]
       }
     ]
   end
+
+  defp settings(atom), do: Application.get_env(:twitch_discord_connector, atom, [])
 end

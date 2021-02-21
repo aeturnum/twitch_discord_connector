@@ -12,6 +12,9 @@ defmodule TwitchDiscordConnector.Discord do
   alias TwitchDiscordConnector.Twitch.User
   alias TwitchDiscordConnector.JsonDB.AwsDB
   alias TwitchDiscordConnector.Util.L
+  alias TwitchDiscordConnector.Template.SrcServer
+  alias TwitchDiscordConnector.Template.SrcCall
+  alias TwitchDiscordConnector.Template.Src
 
   @doc """
   Print the JSON that would be sent for twitch user with id `user_id` if they had a discord hook defined.
@@ -44,7 +47,7 @@ defmodule TwitchDiscordConnector.Discord do
 
     case get_info(user_id) do
       {:ok, {user, stream, game}} ->
-        with {:ok, thumb_url} <- get_thumb(user, stream),
+        with {:ok, thumb_url} <- get_stream_thumb(user, stream),
              message <- stream_message(thumb_url, user, stream, game) do
           L.i("Sending payload to discord: #{Poison.encode!(message)}")
 
@@ -146,9 +149,9 @@ defmodule TwitchDiscordConnector.Discord do
   #    "view_count" => 632209
   #  }}
 
-  defp channel(user), do: "https://www.twitch.tv/#{user}"
+  def channel(user), do: "https://www.twitch.tv/#{user}"
 
-  defp format_time_from_str(time_str) do
+  def format_time_from_str(time_str) do
     with {:ok, dt, _} <- DateTime.from_iso8601(time_str) do
       # streams['created_at'].strftime("%m/%d/%Y, %H:%M:%S")
       "#{dt.month}/#{dt.day}/#{dt.year}, #{dt.hour}:#{dt.minute}:#{dt.second}"
@@ -165,7 +168,7 @@ defmodule TwitchDiscordConnector.Discord do
     String.replace(url_template, Map.keys(rep_map), fn s -> Map.get(rep_map, s, s) end)
   end
 
-  defp get_thumb(%{"login" => l}, %{"thumbnail_url" => turl}) do
+  def get_stream_thumb(%{"login" => l}, %{"thumbnail_url" => turl}) do
     turl |> thumbnail({640, 360}) |> rehost_jpg(l)
   end
 
@@ -202,5 +205,56 @@ defmodule TwitchDiscordConnector.Discord do
         ]
       }
     end
+  end
+
+  def stream_template() do
+    %{
+      "content" => SrcCall.new("twitch.stream", ["th3six4ninja"], "title"),
+      "embeds" => [
+        %{
+          "title" => SrcCall.new("twitch.channel.url", ["th3six4ninja"]),
+          "url" => SrcCall.new("twitch.channel.url", ["th3six4ninja"]),
+          "color" => 6_570_404,
+          "footer" => %{
+            "text" =>
+              SrcCall.new(
+                "twitch.stream.time",
+                [
+                  SrcCall.new("twitch.stream", ["th3six4ninja"], ["started_at"])
+                ]
+              )
+          },
+          "thumbnail" => %{
+            "url" => SrcCall.new("twitch.user", ["th3six4ninja"], "profile_image_url")
+          }
+        }
+      ]
+    }
+
+    # embeds: [
+    #   %{
+    #     title: channel_url,
+    #     url: channel_url,
+    #     color: 6_570_404,
+    #     footer: %{text: started},
+    #     thumbnail: %{
+    #       url: Map.get(user_info, "profile_image_url")
+    #     },
+    #     image: %{url: thumb_url},
+    #     author: %{name: Map.get(user_info, "display_name")},
+    #     fields: [
+    #       %{
+    #         name: "Playing",
+    #         value: Map.get(game_info, "name"),
+    #         inline: true
+    #       },
+    #       %{
+    #         name: "Started at (PST)",
+    #         value: started,
+    #         inline: true
+    #       }
+    #     ]
+    #   }
+    # ]
   end
 end
