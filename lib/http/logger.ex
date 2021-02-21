@@ -9,6 +9,23 @@ defmodule TwitchDiscordConnector.HTTP.Logger do
 
   def init(opts), do: opts
 
+  # Thank you to: https://timber.io/blog/the-ultimate-guide-to-logging-in-elixir/
+
+  def format(level, message, timestamp, _metadata) do
+    "#{fmt_timestamp(timestamp)} [#{level}]  #{message}\n"
+  rescue
+    _ -> "could not format message: #{inspect({level, message, timestamp})}\n"
+  end
+
+  defp fmt_timestamp({date, {hh, mm, ss, ms}}) do
+    with {:ok, timestamp} <- NaiveDateTime.from_erl({date, {hh, mm, ss}}, {ms * 1000, 2}),
+         time <- NaiveDateTime.to_time(timestamp),
+         month_str <- String.pad_leading("#{timestamp.month}", 2, "0"),
+         day_str <- String.pad_leading("#{timestamp.day}", 2, "0") do
+      "#{month_str}/#{day_str}| #{Time.to_iso8601(time)}"
+    end
+  end
+
   def call(conn, _opts) do
     start = System.monotonic_time()
 

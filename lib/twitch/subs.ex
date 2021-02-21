@@ -31,6 +31,9 @@ defmodule TwitchDiscordConnector.Twitch.Subs do
     |> case do
       {:ok, _code, _} ->
         {:ok, %{"user_id" => user_id, "secret" => secret} |> Expires.expires_in(duration)}
+
+      {:error, code, error_info} ->
+        {:error, {code, error_info}}
     end
   end
 
