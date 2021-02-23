@@ -12,9 +12,8 @@ defmodule TwitchDiscordConnector.Discord do
   alias TwitchDiscordConnector.Twitch.User
   alias TwitchDiscordConnector.JsonDB.AwsDB
   alias TwitchDiscordConnector.Util.L
-  alias TwitchDiscordConnector.Template.SrcServer
   alias TwitchDiscordConnector.Template.SrcCall
-  alias TwitchDiscordConnector.Template.Src
+  alias TwitchDiscordConnector.Template
 
   @doc """
   Print the JSON that would be sent for twitch user with id `user_id` if they had a discord hook defined.
@@ -47,6 +46,8 @@ defmodule TwitchDiscordConnector.Discord do
 
     case get_info(user_id) do
       {:ok, {user, stream, game}} ->
+        L.d("Testing template lib: #{stream_template(user["login"]) |> Template.resolve()}")
+
         with {:ok, thumb_url} <- get_stream_thumb(user, stream),
              message <- stream_message(thumb_url, user, stream, game) do
           L.i("Sending payload to discord: #{Poison.encode!(message)}")
@@ -207,26 +208,53 @@ defmodule TwitchDiscordConnector.Discord do
     end
   end
 
-  def stream_template() do
+  def stream_template(username) do
     %{
-      "content" => SrcCall.new("twitch.stream", ["th3six4ninja"], "title"),
+      "content" => SrcCall.new("twitch.stream", [username], "title"),
       "embeds" => [
         %{
-          "title" => SrcCall.new("twitch.channel.url", ["th3six4ninja"]),
-          "url" => SrcCall.new("twitch.channel.url", ["th3six4ninja"]),
+          "title" => SrcCall.new("twitch.channel.url", [username]),
+          "url" => SrcCall.new("twitch.channel.url", [username]),
           "color" => 6_570_404,
           "footer" => %{
             "text" =>
               SrcCall.new(
                 "twitch.stream.time",
-                [
-                  SrcCall.new("twitch.stream", ["th3six4ninja"], ["started_at"])
-                ]
+                SrcCall.new("twitch.stream", [username], "started_at")
               )
           },
           "thumbnail" => %{
-            "url" => SrcCall.new("twitch.user", ["th3six4ninja"], "profile_image_url")
-          }
+            "url" => SrcCall.new("twitch.user", [username], "profile_image_url")
+          },
+          "image" => %{
+            "url" =>
+              SrcCall.new("twitch.stream.thumbnail", [
+                SrcCall.new("twitch.user", [username]),
+                SrcCall.new("twitch.stream", [username])
+              ])
+          },
+          "author" => %{"name" => SrcCall.new("twitch.user", [username], "display_name")},
+          "fields" => [
+            %{
+              "name" => "Playing",
+              "value" =>
+                SrcCall.new(
+                  "twitch.game",
+                  SrcCall.new("twitch.stream", [username], "game_id"),
+                  "name"
+                ),
+              "inline" => true
+            },
+            %{
+              "name" => "Started at (PST)",
+              "value" =>
+                SrcCall.new(
+                  "twitch.stream.time",
+                  SrcCall.new("twitch.stream", [username], "started_at")
+                ),
+              "inline" => true
+            }
+          ]
         }
       ]
     }

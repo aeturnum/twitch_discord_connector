@@ -23,61 +23,17 @@ defmodule TwitchDiscordConnector.Template do
   #   },
   # }
 
-  use GenServer
   alias TwitchDiscordConnector.Util.L
-  alias TwitchDiscordConnector.Template.Src
   alias TwitchDiscordConnector.Template.SrcCall
   alias TwitchDiscordConnector.Template
 
-  @name Template
   @task_timeout 5000
 
-  def check(template) do
-    GenServer.call(@name, {:check, template})
-  end
+  def load_calls(template), do: SrcCall.maybe_wrap(template)
 
-  def list() do
-    GenServer.call(@name, :list)
-  end
+  def resolve(template), do: SrcCall.maybe_wrap(template) |> do_resolve()
 
-  def load_calls(template) do
-    GenServer.call(@name, {:load, template})
-  end
-
-  def resolve(template) do
-    GenServer.call(@name, {:resolve, template})
-  end
-
-  def terminate(reason, state) do
-    IO.puts("SrcServer.terminate - #{inspect(reason)}, #{inspect(state)}")
-  end
-
-  def handle_cast(arg, state) do
-    IO.puts("SrcServer.handle_cast - #{inspect(arg)}, #{inspect(state)}")
-    {:noreply, state}
-  end
-
-  def handle_call({:load, template}, _from, state) do
-    {:reply, SrcCall.maybe_wrap(template), state}
-  end
-
-  def handle_call({:resolve, template}, _from, state) do
-    {:reply, SrcCall.maybe_wrap(template) |> do_resolve(), state}
-  end
-
-  def handle_call({:check, template}, _from, state) do
-    {:reply, validate(template), state}
-  end
-
-  def handle_call(arg, _from, state) do
-    IO.puts("SrcServer: Unexpected handle_call: #{inspect(arg)}")
-    {:reply, nil, state}
-  end
-
-  def handle_info(msg, state) do
-    IO.puts("SrcServer.handle_info: #{inspect(self())} #{inspect(msg)}")
-    {:noreply, state}
-  end
+  def check(template), do: validate(template)
 
   defp validate(template) do
     SrcCall.maybe_wrap(template)
@@ -85,60 +41,91 @@ defmodule TwitchDiscordConnector.Template do
   end
 
   defp do_resolve(template) do
-    with calls <- collect_calls(template),
-         results <- do_calls(calls) do
+    with calls <- collect_calls(template) |> L.ins_("collect calls"),
+         call_map <- find_dependencies(calls) |> L.ins("dependencies"),
+         # todo: add dependency graph for calls
+         results <- do_calls(call_map) |> L.ins("results") do
       SrcCall.replace_with_results(template, results)
     end
   end
 
-  defp do_calls(calls) do
-    calls
-    |> Enum.map(fn src_call -> Src.task(src_call.src, src_call.args) end)
-    # thank you https://stackoverflow.com/questions/42330425/how-to-await-multiple-tasks-in-elixir
-    |> Task.yield_many(@task_timeout)
-    |> Enum.reduce(%{}, fn {task, result}, results ->
-      case result do
-        nil ->
-          L.e("Task timed out!")
-          Task.shutdown(task, :brutal_kill)
+  defp collect_result({task, result}, results) do
+    L.d("Checking task: #{inspect(result)}")
 
-        {:exit, reason} ->
-          L.e("Task failed: #{inspect(reason)}")
+    case result do
+      nil ->
+        L.e("Task timed out!")
+        Task.shutdown(task, :brutal_kill)
+        results
 
-        {:ok, {name, {code, value}}} ->
-          case code do
-            :ok ->
-              Map.put(results, name, value)
+      {:exit, reason} ->
+        L.e("Task failed: #{inspect(reason)}")
+        results
 
-            :error ->
-              L.e("Task #{name} succeded but had internal error: #{inspect(value)}")
-              results
-          end
+      {:ok, {name, {code, value}}} ->
+        case code do
+          :ok ->
+            value =
+              case value do
+                # atomception
+                {:ok, real_value} -> real_value
+                _ -> value
+              end
+
+            Map.put(results, name, value)
+
+          :error ->
+            L.e("Task #{name} succeded but had internal error: #{inspect(value)}")
+            results
+        end
+    end
+  end
+
+  defp do_calls(call_map, prev_results \\ %{}, level \\ 0) do
+    case Map.has_key?(call_map, level) do
+      true ->
+        do_calls(
+          call_map,
+          call_map[level]
+          # |> L.ins("map[#{level}]")
+          |> Enum.map(fn {src_call, _} -> SrcCall.task(src_call) end)
+          # thank you https://stackoverflow.com/questions/42330425/how-to-await-multiple-tasks-in-elixir
+          |> Task.yield_many(@task_timeout)
+          |> Enum.reduce(prev_results, &collect_result/2)
+          |> L.ins("map[#{level}] results"),
+          level + 1
+        )
+
+      false ->
+        prev_results
+    end
+  end
+
+  defp find_dependencies(calls) do
+    Enum.reduce(calls, %{}, fn src_call, deps ->
+      with {degree, this_deps} <- SrcCall.depends_on(src_call),
+           calls_at_this_degree <- Map.get(deps, degree, []) do
+        Map.put(deps, degree, [{src_call, this_deps} | calls_at_this_degree])
       end
     end)
+
+    # |> L.ins("find_dependencies")
   end
 
   defp collect_calls(template, calls \\ [])
 
   defp collect_calls(s = %SrcCall{}, calls), do: [s | calls]
+  # todo: fix all the other crawls for lists
+  defp collect_calls([item | rest], calls), do: collect_calls(rest, collect_calls(item, calls))
 
   defp collect_calls(template = %{}, calls) do
-    Enum.reduce(template, calls, fn
-      {_, value}, list -> collect_calls(value, list)
+    # L.d("collect_calls(#{inspect(template)})")
+
+    Map.values(template)
+    |> Enum.reduce(calls, fn value, list ->
+      collect_calls(value, list)
     end)
   end
 
   defp collect_calls(_, calls), do: calls
-
-  def init(_) do
-    {
-      :ok,
-      # tasks
-      []
-    }
-  end
-
-  def start_link(modules) do
-    GenServer.start_link(__MODULE__, modules, name: @name)
-  end
 end

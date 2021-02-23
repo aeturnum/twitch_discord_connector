@@ -20,7 +20,8 @@ defmodule TwitchDiscordConnector.Template.SrcServer do
   end
 
   def load(path) do
-    GenServer.call(@name, {:load, path}) |> IO.inspect(label: "load #{path}?:")
+    GenServer.call(@name, {:load, path})
+    # |> IO.inspect(label: "load #{path}?:")
   end
 
   # stubs to log if we get an unexpected call

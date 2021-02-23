@@ -96,6 +96,71 @@ defmodule TwitchDiscordConnector.Util.L do
   def w(s), do: do_log(log_str(s), &Logger.warn/1)
   def i(s), do: do_log(log_str(s), &Logger.info/1)
 
+  def to_s(nil), do: "nil"
+
+  def to_s(o) do
+    # try do
+    case Enumerable.impl_for(o) do
+      Enumerable.Function ->
+        wrap_chars(o)
+
+      nil ->
+        wrap_chars(o)
+
+      module ->
+        {open, close} =
+          case module do
+            # Enumerable.Tuple -> {"{", "}"}
+            Enumerable.Map -> {"%{", "}"}
+            Enumerable.List -> {"[", "]"}
+            other -> raise "Can't deal with #{inspect(other)}"
+          end
+
+        [
+          open,
+          Enum.map(o, fn
+            {a, b} -> "#{to_s(a)}: #{to_s(b)}"
+            a -> to_s(a)
+          end)
+          |> Enum.join(", "),
+          close
+        ]
+        |> Enum.join("")
+    end
+
+    # rescue
+    #   _ -> "#{inspect(o)}"
+    # end
+  end
+
+  defp wrap_chars(o) do
+    case String.Chars.impl_for(o) do
+      nil ->
+        "#{inspect(o)}"
+
+      type ->
+        case type do
+          String.Chars.BitString -> "\"#{o}\""
+          String.Chars.Atom -> ":#{o}"
+          _ -> "#{o}"
+        end
+    end
+  end
+
+  def sins(obj, opts \\ []) do
+    with opts <- to_ins_list(opts) do
+      "#{to_s(obj)}"
+      |> do_i_label(opts)
+      |> do_i_prefix(opts)
+      |> do_log(&Logger.debug/1)
+
+      obj
+    end
+  end
+
+  # no-op
+  def ins_(obj, _), do: obj
+
   # todo: error
   def ins(obj, opts \\ []) do
     opts = to_ins_list(opts)

@@ -2,6 +2,7 @@ defmodule TwitchDiscordConnectorTest.TemplateTest do
   use ExUnit.Case
 
   alias TwitchDiscordConnector.Template
+  alias TwitchDiscordConnector.Util.H
   alias TwitchDiscordConnector.Template.Src
   alias TwitchDiscordConnector.Template.SrcCall
   alias TwitchDiscordConnector.Template.SrcServer
@@ -65,11 +66,15 @@ defmodule TwitchDiscordConnectorTest.TemplateTest do
 
   test "template complex" do
     assert Template.resolve(complex())
-           |> IO.inspect(label: "complex")
            |> Map.get("big wrap") == "because I have a key structure"
   end
 
   test "template list" do
     SrcServer.list() |> IO.inspect()
   end
+
+  # test "nested" do
+  #   Template.resolve(TwitchDiscordConnector.Discord.stream_template("th3six4ninja"))
+  #   |> IO.inspect()
+  # end
 end

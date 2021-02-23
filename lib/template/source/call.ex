@@ -4,6 +4,8 @@ defmodule TwitchDiscordConnector.Template.SrcCall do
 
   alias TwitchDiscordConnector.Template.SrcCall
   alias TwitchDiscordConnector.Template.Src
+  alias TwitchDiscordConnector.Util.L
+  alias TwitchDiscordConnector.Util.H
   alias TwitchDiscordConnector.Template.SrcServer
 
   def unwrap(text) do
@@ -23,87 +25,140 @@ defmodule TwitchDiscordConnector.Template.SrcCall do
   def new(s = %Src{}, args, keys) do
     %SrcCall{
       src: s,
-      args: args,
-      keys: keys
+      args: ensure_list(args),
+      keys: ensure_list(keys)
     }
   end
 
   def new(s, args, keys) when is_binary(s) do
     %SrcCall{
       src: SrcServer.load(s),
-      args: args,
-      keys: keys
+      args: ensure_list(args),
+      keys: ensure_list(keys)
     }
   end
 
-  def call(s = %SrcCall{}) do
-    with result <- Src.call(s.src, s.args) do
-      case s.keys do
-        [] ->
-          result
+  defp ensure_list(l) when is_list(l), do: l
+  defp ensure_list(l), do: [l]
 
-        _ ->
-          Enum.reduce(s.keys, result, fn key, i_result ->
-            i_result[key]
-          end)
-      end
+  def glyph(s = %SrcCall{}) do
+    with args <- Enum.map(s.args, &L.to_s/1),
+         arg_str <- Enum.join(args, ",") do
+      "#{s.src.path}(#{arg_str})"
     end
   end
 
-  def maybe_wrap(node = %{"src" => s, "args" => _, "keys" => _}) do
-    case SrcServer.exists?(s) do
-      false ->
-        with json_node <- Poison.encode!(node) do
-          SrcCall.new(@unwrap, [json_node])
+  # def glyph(o) do
+  #   case Enumerable.impl_for(o) do
+  #     nil ->
+  #       case String.Chars.impl_for(o) do
+  #         nil -> "#{inspect(o)}"
+  #         _ -> "#{o}"
+  #       end
+
+  #     _ ->
+  #       with args <- Enum.map(o, &glyph/1),
+  #            arg_str <- Enum.join(args, ",") do
+  #         arg_str
+  #       end
+  #   end
+  # end
+
+  def task(sc = %SrcCall{}) do
+    Task.async(fn -> {glyph(sc), Src.call(sc.src, sc.args)} end)
+  end
+
+  # def call(s = %SrcCall{}) do
+  #   with result <- Src.call(s.src, s.args) do
+  #     case s.keys do
+  #       [] ->
+  #         result
+
+  #       _ ->
+  #         Enum.reduce(s.keys, result, fn key, i_result ->
+  #           i_result[key]
+  #         end)
+  #     end
+  #   end
+  # end
+
+  def depends_on(s = %SrcCall{}) do
+    L.d("depends_on(#{s})")
+
+    Enum.reduce(s.args, [], fn
+      sc = %SrcCall{}, deps ->
+        with {count, arg_deps} <- depends_on(sc) do
+          [{1 + count, SrcCall.glyph(sc), arg_deps} | deps]
         end
 
-      true ->
-        node
+      _, deps ->
+        deps
+    end)
+    |> case do
+      [] ->
+        {0, []}
+
+      dep_list ->
+        Enum.reduce(dep_list, {1, dep_list}, fn {count, _, _}, {t_max, list} ->
+          {max(count, t_max), list}
+        end)
     end
   end
 
-  def maybe_wrap(node = %SrcCall{}), do: node
+  def maybe_wrap(node) do
+    H.walk_map(node, fn
+      node = %{"src" => s, "args" => _, "keys" => _} ->
+        L.d("maybe_wrap(node) -> replacing #{L.to_s(node)}!")
 
-  def maybe_wrap(node) when is_map(node) do
-    Enum.reduce(
-      node,
-      %{},
-      fn {key, sub_node}, new_map ->
-        Map.put(new_map, key, maybe_wrap(sub_node))
-      end
-    )
-  end
+        case SrcServer.exists?(s) do
+          false ->
+            with json_node <- Poison.encode!(node) do
+              SrcCall.new(@unwrap, [json_node])
+            end
 
-  def maybe_wrap(node), do: node
+          true ->
+            node
+        end
 
-  def load_src_calls(%{"src" => s, "args" => args, "keys" => keys}) do
-    SrcCall.new(SrcServer.load(s), args, keys)
-  end
-
-  def load_src_calls(map = %{}) do
-    Enum.reduce(map, %{}, fn {key, node}, new_map ->
-      Map.put(new_map, key, load_src_calls(node))
+      x ->
+        x
     end)
   end
 
-  def load_src_calls(non_map), do: non_map
-
-  def replace_with_results(node = %SrcCall{}, call_results) do
-    # go through the nested keys
-    Enum.reduce(
-      node.keys,
-      call_results[node.src.path],
-      fn next_key, intermediate -> intermediate[next_key] end
-    )
-  end
-
-  def replace_with_results(map = %{}, call_results) do
-    Enum.reduce(map, %{}, fn {key, node}, new_map ->
-      Map.put(new_map, key, replace_with_results(node, call_results))
+  def load_src_calls(map) do
+    H.walk_map(map, fn
+      %{"src" => s, "args" => args, "keys" => keys} -> SrcCall.new(SrcServer.load(s), args, keys)
+      x -> x
     end)
   end
 
-  def replace_with_results(node, _), do: node
+  def replace_with_results(map, call_results) do
+    H.walk_map(map, fn
+      node = %SrcCall{} ->
+        L.d("replace_with_results(#{node})")
+
+        with our_result <- Map.get(call_results, SrcCall.glyph(node)) do
+          try do
+            case node.keys do
+              [] ->
+                our_result
+
+              k ->
+                # L.d("get_in(#{inspect(our_result)}, #{inspect(k)})")
+                get_in(our_result, k)
+            end
+          rescue
+            err ->
+              L.e("Call #{node} couldn't keys from #{inspect(our_result)} : #{inspect(err)}")
+
+              nil
+          end
+        end
+
+      x ->
+        x
+    end)
+  end
 
   defimpl Poison.Encoder, for: SrcCall do
     def encode(%{src: s, args: args, keys: keys}, options) do
@@ -112,6 +167,8 @@ defmodule TwitchDiscordConnector.Template.SrcCall do
   end
 
   defimpl String.Chars, for: SrcCall do
-    def to_string(s), do: "sCall:#{s.src}(#{inspect(s.args)}).#{inspect(s.keys)}"
+    def to_string(s), do: "sCall{#{SrcCall.glyph(s)}}#{keys(s.keys)}"
+    def keys([]), do: ""
+    def keys(o), do: ".#{L.to_s(o)}"
   end
 end

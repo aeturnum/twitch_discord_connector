@@ -27,7 +27,6 @@ defmodule TwitchDiscordConnector do
     [
       {TwitchDiscordConnector.JsonDB, settings(:init_jsondb)},
       {TwitchDiscordConnector.Event, settings(:init_event)},
-      {TwitchDiscordConnector.Template, settings(:init_template)},
       {TwitchDiscordConnector.Template.SrcServer, settings(:init_srcserver)}
     ]
     |> Supervisor.start_link(strategy: :one_for_one, name: TwitchDiscordConnector.Supervisor)
