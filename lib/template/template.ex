@@ -89,11 +89,11 @@ defmodule TwitchDiscordConnector.Template do
           call_map,
           call_map[level]
           # |> L.ins("map[#{level}]")
-          |> Enum.map(fn {src_call, _} -> SrcCall.task(src_call) end)
+          |> Enum.map(fn {src_call, _} -> SrcCall.task(src_call, prev_results) end)
           # thank you https://stackoverflow.com/questions/42330425/how-to-await-multiple-tasks-in-elixir
           |> Task.yield_many(@task_timeout)
-          |> Enum.reduce(prev_results, &collect_result/2)
-          |> L.ins("map[#{level}] results"),
+          |> Enum.reduce(prev_results, &collect_result/2),
+          # |> L.ins("map[#{level}] results"),
           level + 1
         )
 
@@ -107,7 +107,7 @@ defmodule TwitchDiscordConnector.Template do
       with {degree, this_deps} <- SrcCall.depends_on(src_call),
            calls_at_this_degree <- Map.get(deps, degree, []) do
         Map.put(deps, degree, [
-          {src_call, this_deps |> L.ins("this_deps")} | calls_at_this_degree
+          {src_call, this_deps} | calls_at_this_degree
         ])
       end
     end)

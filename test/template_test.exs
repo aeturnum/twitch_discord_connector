@@ -73,26 +73,25 @@ defmodule TwitchDiscordConnectorTest.TemplateTest do
     )
   end
 
-  # test "basic template" do
-  #   with_calls = Template.load_calls(basic())
-  #   assert with_calls["wrap"].src.path == "template.unwrap"
-  # end
+  test "basic template" do
+    with_calls = Template.load_calls(basic())
+    assert with_calls["wrap"].src.path == "template.unwrap"
+  end
 
-  # test "template source test" do
-  #   Template.resolve(medium()) |> IO.inspect(label: "resolved")
-  # end
+  test "template source test" do
+    Template.resolve(medium()) |> IO.inspect(label: "resolved")
+  end
 
-  # test "template complex" do
-  #   assert Template.resolve(key_test())
-  #          |> Map.get("big wrap") == "because I have a key structure"
-  # end
+  test "template complex" do
+    assert Template.resolve(key_test())
+           |> Map.get("big wrap") == "because I have a key structure"
+  end
 
-  # test "template list" do
-  #   SrcServer.list() |> IO.inspect()
-  # end
+  test "template list" do
+    SrcServer.list() |> IO.inspect()
+  end
 
   test "nested" do
-    Template.resolve(complex())
-    |> IO.inspect(label: "complex")
+    assert Template.resolve(complex()) == {"I should get wrapped", 1}
   end
 end

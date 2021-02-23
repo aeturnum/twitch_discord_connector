@@ -64,9 +64,14 @@ defmodule TwitchDiscordConnector.Template.SrcCall do
   #   end
   # end
 
-  def task(sc = %SrcCall{}) do
-    Task.async(fn -> {glyph(sc), Src.call(sc.src, sc.args)} end)
+  def task(sc = %SrcCall{}, results) do
+    with args <- Enum.map(sc.args, fn arg -> replace_arg(arg, results) end) do
+      Task.async(fn -> {glyph(sc), Src.call(sc.src, args)} end)
+    end
   end
+
+  def replace_arg(sc = %SrcCall{}, results), do: resolve_call(sc, results)
+  def replace_arg(o, _), do: o
 
   # def call(s = %SrcCall{}) do
   #   with result <- Src.call(s.src, s.args) do
@@ -132,28 +137,32 @@ defmodule TwitchDiscordConnector.Template.SrcCall do
     end)
   end
 
+  def resolve_call(call = %SrcCall{}, call_results) do
+    L.d("resolve_call(#{call})")
+
+    with our_result <- Map.get(call_results, SrcCall.glyph(call)) do
+      try do
+        case call.keys do
+          [] ->
+            our_result
+
+          k ->
+            # L.d("get_in(#{inspect(our_result)}, #{inspect(k)})")
+            get_in(our_result, k)
+        end
+      rescue
+        err ->
+          L.e("Call #{call} couldn't keys from #{inspect(our_result)} : #{inspect(err)}")
+
+          nil
+      end
+    end
+  end
+
   def replace_with_results(map, call_results) do
     H.walk_map(map, fn
       node = %SrcCall{} ->
-        L.d("replace_with_results(#{node})")
-
-        with our_result <- Map.get(call_results, SrcCall.glyph(node)) do
-          try do
-            case node.keys do
-              [] ->
-                our_result
-
-              k ->
-                # L.d("get_in(#{inspect(our_result)}, #{inspect(k)})")
-                get_in(our_result, k)
-            end
-          rescue
-            err ->
-              L.e("Call #{node} couldn't keys from #{inspect(our_result)} : #{inspect(err)}")
-
-              nil
-          end
-        end
+        resolve_call(node, call_results)
 
       x ->
         x
