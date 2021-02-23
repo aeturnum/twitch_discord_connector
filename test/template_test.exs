@@ -8,15 +8,23 @@ defmodule TwitchDiscordConnectorTest.TemplateTest do
   alias TwitchDiscordConnector.Template.SrcServer
   alias TwitchDiscordConnectorTest.TemplateTest
 
-  def identity_func(item), do: item
+  def ident(x), do: x
+  def and_(a, b), do: {a, b}
 
   @fakeCall Src.new(
               "template.testing.fakecall",
               "Testing function to test returning a nested data structure",
               "{}",
-              &TemplateTest.identity_func/1,
+              &TemplateTest.ident/1,
               false
             )
+  @andCall Src.new(
+             "template.testing.and",
+             "Testing function to combine two args",
+             "{}",
+             &TemplateTest.and_/2,
+             false
+           )
 
   def basic() do
     %{
@@ -44,7 +52,7 @@ defmodule TwitchDiscordConnectorTest.TemplateTest do
     )
   end
 
-  def complex() do
+  def key_test() do
     %{
       "big wrap" =>
         SrcCall.new(
@@ -55,26 +63,36 @@ defmodule TwitchDiscordConnectorTest.TemplateTest do
     }
   end
 
-  test "basic template" do
-    with_calls = Template.load_calls(basic())
-    assert with_calls["wrap"].src.path == "template.unwrap"
+  def complex() do
+    SrcCall.new(
+      @andCall,
+      [
+        SrcCall.new(@fakeCall, basic(), ["wrap", "src"]),
+        SrcCall.new(@fakeCall, basic(), ["stuff", "a"])
+      ]
+    )
   end
 
-  test "template source test" do
-    Template.resolve(medium()) |> IO.inspect(label: "resolved")
-  end
-
-  test "template complex" do
-    assert Template.resolve(complex())
-           |> Map.get("big wrap") == "because I have a key structure"
-  end
-
-  test "template list" do
-    SrcServer.list() |> IO.inspect()
-  end
-
-  # test "nested" do
-  #   Template.resolve(TwitchDiscordConnector.Discord.stream_template("th3six4ninja"))
-  #   |> IO.inspect()
+  # test "basic template" do
+  #   with_calls = Template.load_calls(basic())
+  #   assert with_calls["wrap"].src.path == "template.unwrap"
   # end
+
+  # test "template source test" do
+  #   Template.resolve(medium()) |> IO.inspect(label: "resolved")
+  # end
+
+  # test "template complex" do
+  #   assert Template.resolve(key_test())
+  #          |> Map.get("big wrap") == "because I have a key structure"
+  # end
+
+  # test "template list" do
+  #   SrcServer.list() |> IO.inspect()
+  # end
+
+  test "nested" do
+    Template.resolve(complex())
+    |> IO.inspect(label: "complex")
+  end
 end

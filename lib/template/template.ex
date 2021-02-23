@@ -24,6 +24,7 @@ defmodule TwitchDiscordConnector.Template do
   # }
 
   alias TwitchDiscordConnector.Util.L
+  alias TwitchDiscordConnector.Util.H
   alias TwitchDiscordConnector.Template.SrcCall
   alias TwitchDiscordConnector.Template
 
@@ -105,27 +106,33 @@ defmodule TwitchDiscordConnector.Template do
     Enum.reduce(calls, %{}, fn src_call, deps ->
       with {degree, this_deps} <- SrcCall.depends_on(src_call),
            calls_at_this_degree <- Map.get(deps, degree, []) do
-        Map.put(deps, degree, [{src_call, this_deps} | calls_at_this_degree])
+        Map.put(deps, degree, [
+          {src_call, this_deps |> L.ins("this_deps")} | calls_at_this_degree
+        ])
       end
     end)
 
     # |> L.ins("find_dependencies")
   end
 
-  defp collect_calls(template, calls \\ [])
+  defp collect_call(s = %SrcCall{}, acc) do
+    acc =
+      Enum.reduce(s.args, acc, fn
+        s = %SrcCall{}, acc -> [s | acc]
+        _, acc -> acc
+      end)
 
-  defp collect_calls(s = %SrcCall{}, calls), do: [s | calls]
-  # todo: fix all the other crawls for lists
-  defp collect_calls([item | rest], calls), do: collect_calls(rest, collect_calls(item, calls))
-
-  defp collect_calls(template = %{}, calls) do
-    # L.d("collect_calls(#{inspect(template)})")
-
-    Map.values(template)
-    |> Enum.reduce(calls, fn value, list ->
-      collect_calls(value, list)
-    end)
+    {s, [s | acc]}
   end
 
-  defp collect_calls(_, calls), do: calls
+  defp collect_call(s, acc), do: {s, acc}
+
+  defp collect_calls(template) do
+    H.walk_map(
+      template,
+      &collect_call/2,
+      []
+    )
+    |> elem(1)
+  end
 end
