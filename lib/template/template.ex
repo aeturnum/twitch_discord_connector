@@ -26,7 +26,6 @@ defmodule TwitchDiscordConnector.Template do
   alias TwitchDiscordConnector.Util.L
   alias TwitchDiscordConnector.Util.H
   alias TwitchDiscordConnector.Template.SrcCall
-  alias TwitchDiscordConnector.Template
 
   @task_timeout 5000
 
@@ -42,16 +41,16 @@ defmodule TwitchDiscordConnector.Template do
   end
 
   defp do_resolve(template) do
-    with calls <- collect_calls(template) |> L.ins_("collect calls"),
-         call_map <- find_dependencies(calls) |> L.ins("dependencies"),
+    with calls <- collect_calls(template),
+         call_map <- order_by_dependency(calls),
          # todo: add dependency graph for calls
-         results <- do_calls(call_map) |> L.ins("results") do
+         results <- do_calls(call_map) |> L.ins("call results") do
       SrcCall.replace_with_results(template, results)
     end
   end
 
   defp collect_result({task, result}, results) do
-    L.d("Checking task: #{inspect(result)}")
+    # L.d("Checking task: #{inspect(result)}")
 
     case result do
       nil ->
@@ -102,7 +101,7 @@ defmodule TwitchDiscordConnector.Template do
     end
   end
 
-  defp find_dependencies(calls) do
+  defp order_by_dependency(calls) do
     Enum.reduce(calls, %{}, fn src_call, deps ->
       with {degree, this_deps} <- SrcCall.depends_on(src_call),
            calls_at_this_degree <- Map.get(deps, degree, []) do
@@ -116,23 +115,13 @@ defmodule TwitchDiscordConnector.Template do
   end
 
   defp collect_call(s = %SrcCall{}, acc) do
-    acc =
-      Enum.reduce(s.args, acc, fn
-        s = %SrcCall{}, acc -> [s | acc]
-        _, acc -> acc
-      end)
-
-    {s, [s | acc]}
+    {s, [s | Enum.reduce(s.args, acc, fn arg, acc -> collect_call(arg, acc) |> elem(1) end)]}
   end
 
   defp collect_call(s, acc), do: {s, acc}
 
   defp collect_calls(template) do
-    H.walk_map(
-      template,
-      &collect_call/2,
-      []
-    )
+    H.walk_map(template, &collect_call/2, [])
     |> elem(1)
   end
 end

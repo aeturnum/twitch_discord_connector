@@ -88,7 +88,7 @@ defmodule TwitchDiscordConnector.Template.SrcCall do
   # end
 
   def depends_on(s = %SrcCall{}) do
-    L.d("depends_on(#{s})")
+    # L.d("depends_on(#{s})")
 
     Enum.reduce(s.args, [], fn
       sc = %SrcCall{}, deps ->
@@ -113,7 +113,7 @@ defmodule TwitchDiscordConnector.Template.SrcCall do
   def maybe_wrap(node) do
     H.walk_map(node, fn
       node = %{"src" => s, "args" => _, "keys" => _} ->
-        L.d("maybe_wrap(node) -> replacing #{L.to_s(node)}!")
+        # L.d("maybe_wrap(node) -> replacing #{L.to_s(node)}!")
 
         case SrcServer.exists?(s) do
           false ->
@@ -138,7 +138,7 @@ defmodule TwitchDiscordConnector.Template.SrcCall do
   end
 
   def resolve_call(call = %SrcCall{}, call_results) do
-    L.d("resolve_call(#{call})")
+    # L.d("resolve_call(#{call})")
 
     with our_result <- Map.get(call_results, SrcCall.glyph(call)) do
       try do

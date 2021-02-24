@@ -3,7 +3,7 @@ defmodule TwitchDiscordConnector.HTTP.Headers do
   Helper methods to create headers for Plug
   """
 
-  def create_headers(conn, keywords) do
+  def add_headers_to_resp(conn, keywords) do
     headers = get_headers(keywords)
     put_headers(conn, headers)
   end
@@ -24,15 +24,19 @@ defmodule TwitchDiscordConnector.HTTP.Headers do
     add_header([key]) ++ get_headers(rest)
   end
 
-  def get_headers(request) do
-    args = [
-      length: request.size,
-      mime: request.mime,
-      disposition: [attachment: request.download, name: request.name]
-    ]
+  # todo: How was this supposed to work?!
+  def get_headers(_) do
+    raise "We should not call this!"
+    # args = [
+    #   length: request.size,
+    #   mime: request.mime,
+    #   disposition: [attachment: request.download, name: request.name]
+    # ]
 
-    get_headers(args)
+    # get_headers(args)
   end
+
+  def add_header(content_encoding: ce), do: ["content-encoding": ce]
 
   def add_header(length: length), do: ["content-length": length]
   def add_header(mime: mime), do: ["content-type": mime]

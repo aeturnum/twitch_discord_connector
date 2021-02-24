@@ -2,7 +2,6 @@ defmodule TwitchDiscordConnectorTest.TemplateTest do
   use ExUnit.Case
 
   alias TwitchDiscordConnector.Template
-  alias TwitchDiscordConnector.Util.H
   alias TwitchDiscordConnector.Template.Src
   alias TwitchDiscordConnector.Template.SrcCall
   alias TwitchDiscordConnector.Template.SrcServer
@@ -79,7 +78,7 @@ defmodule TwitchDiscordConnectorTest.TemplateTest do
   end
 
   test "template source test" do
-    Template.resolve(medium()) |> IO.inspect(label: "resolved")
+    assert Template.resolve(medium())["wrap 2"] == %{"test 1" => "1", "test 2" => 2}
   end
 
   test "template complex" do
@@ -88,7 +87,7 @@ defmodule TwitchDiscordConnectorTest.TemplateTest do
   end
 
   test "template list" do
-    SrcServer.list() |> IO.inspect()
+    SrcServer.list()
   end
 
   test "nested" do

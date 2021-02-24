@@ -7,6 +7,23 @@ defmodule TwitchDiscordConnector.Util.L do
   require Logger
   # Process.info(self(), :current_stacktrace)
 
+  # Thank you to: https://timber.io/blog/the-ultimate-guide-to-logging-in-elixir/
+
+  def format(level, message, timestamp, _metadata) do
+    "#{fmt_timestamp(timestamp)} [#{level}]  #{message}\n"
+  rescue
+    _ -> "could not format message: #{inspect({level, message, timestamp})}\n"
+  end
+
+  defp fmt_timestamp({date, {hh, mm, ss, ms}}) do
+    with {:ok, timestamp} <- NaiveDateTime.from_erl({date, {hh, mm, ss}}, {ms * 1000, 2}),
+         time <- NaiveDateTime.to_time(timestamp),
+         month_str <- String.pad_leading("#{timestamp.month}", 2, "0"),
+         day_str <- String.pad_leading("#{timestamp.day}", 2, "0") do
+      "#{month_str}/#{day_str}| #{Time.to_iso8601(time)}"
+    end
+  end
+
   defp do_log(line, f) do
     f.(line)
 
@@ -94,7 +111,7 @@ defmodule TwitchDiscordConnector.Util.L do
   def d(s), do: do_log(log_str(s), &Logger.debug/1)
   def e(s), do: do_log(log_str(s), &Logger.error/1)
   def w(s), do: do_log(log_str(s), &Logger.warn/1)
-  def i(s), do: do_log(log_str(s), &Logger.info/1)
+  def i(s), do: do_log("#{s}", &Logger.info/1)
 
   def to_s(nil), do: "nil"
 

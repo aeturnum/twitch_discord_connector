@@ -13,6 +13,6 @@ config :ex_aws, :s3,
   host: "sfo2.digitaloceanspaces.com",
   region: "sfo2"
 
-config :logger, :console, format: {TwitchDiscordConnector.HTTP.Logger, :format}
+config :logger, :console, format: {TwitchDiscordConnector.Util.L, :format}
 
 import_config "#{config_env()}.exs"

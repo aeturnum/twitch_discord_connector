@@ -17,7 +17,7 @@ defmodule TwitchDiscordConnector.HTTP.Response do
 
   def send_json_response(jsonable_object, conn, code \\ 200) do
     conn
-    |> Headers.create_headers(mime: "application/json")
+    |> Headers.add_headers_to_resp(mime: "application/json")
     |> Plug.Conn.send_resp(code, encode_json(jsonable_object))
   end
 

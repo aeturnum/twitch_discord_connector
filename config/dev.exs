@@ -1,4 +1,6 @@
 import Config
 
 # use prod settings for dev
-import_config "prod.exs"
+config :twitch_discord_connector, :init_jsondb, path: "db.json"
+
+config :twitch_discord_connector, :init_event, []

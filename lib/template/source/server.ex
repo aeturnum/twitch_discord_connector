@@ -7,7 +7,7 @@ defmodule TwitchDiscordConnector.Template.SrcServer do
   def register(src = %{path: path}) do
     GenServer.cast(@name, {:register, path, src})
 
-    L.d("Source #{path} registered!")
+    L.i("Source #{path} registered!")
     src
   end
 

@@ -172,7 +172,7 @@ defmodule TwitchDiscordConnectorTest.Event do
 
     :timer.sleep(70)
     {:ok, end_state} = Event.get_state(mod_id)
-    IO.inspect(end_state.calls, pretty: true)
+    # IO.inspect(end_state.calls, pretty: true)
     assert end_state.sto == :delay_done
   end
 

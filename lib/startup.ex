@@ -5,16 +5,16 @@ defmodule TwitchDiscordConnector.Startup do
   alias TwitchDiscordConnector.Template.SrcServer
 
   def startup_tasks() do
-    L.d("Begining startup tasks")
+    L.i("Begining startup tasks")
 
     load_sources()
 
-    L.d("Startup tasks complete")
+    L.i("Startup tasks complete")
   end
 
   # todo: figure out why this can't be a module variable
   def load_sources do
-    L.d("Registering Sources...")
+    L.i("Registering Sources...")
 
     Startup.__info__(:functions)
     |> Enum.reduce(
@@ -28,7 +28,7 @@ defmodule TwitchDiscordConnector.Startup do
     )
     |> Enum.each(fn src_maker -> SrcServer.register(src_maker.()) end)
 
-    L.d("Sources registered")
+    L.i("Sources registered")
   end
 
   # Source creators

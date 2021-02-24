@@ -6,6 +6,7 @@ defmodule TwitchDiscordConnector.Views.Router do
   """
   alias TwitchDiscordConnector.HTTP.Static
   alias TwitchDiscordConnector.Views.Routes
+  alias TwitchDiscordConnector.HTTP.Logger
   use Plug.Router
 
   plug(TwitchDiscordConnector.HTTP.Logger)
@@ -21,18 +22,20 @@ defmodule TwitchDiscordConnector.Views.Router do
   plug(:match)
   plug(:dispatch)
 
-  # get "/" do
-  #   Routes.status(conn, [])
-  # end
+  get "/" do
+    Static.static(conn, path: ["index.html"])
+  end
 
   get "/hook/stream" do
     Routes.confirm_subscription(conn)
+    |> Logger.log_call()
   end
 
   post "/hook/stream" do
     conn
     |> Plug.Conn.fetch_query_params()
     |> Routes.handle_stream_notification()
+    |> Logger.log_call()
   end
 
   get "/*path" do
