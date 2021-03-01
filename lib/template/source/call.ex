@@ -1,5 +1,5 @@
 defmodule TwitchDiscordConnector.Template.SrcCall do
-  @derive [Poison.Encoder]
+  # @derive [Poison.Encoder]
   defstruct src: "", args: [], keys: []
 
   alias TwitchDiscordConnector.Template.SrcCall
@@ -43,26 +43,14 @@ defmodule TwitchDiscordConnector.Template.SrcCall do
 
   def glyph(s = %SrcCall{}) do
     with args <- Enum.map(s.args, &L.to_s/1),
-         arg_str <- Enum.join(args, ",") do
-      "#{s.src.path}(#{arg_str})"
+         arg_str <- Enum.join(args, ","),
+         sha <- :crypto.hash(:sha256, arg_str) |> Base.encode32() do
+      case String.length(arg_str) > String.length(sha) do
+        true -> "#{s.src.path}(#{sha})"
+        false -> "#{s.src.path}(#{arg_str})"
+      end
     end
   end
-
-  # def glyph(o) do
-  #   case Enumerable.impl_for(o) do
-  #     nil ->
-  #       case String.Chars.impl_for(o) do
-  #         nil -> "#{inspect(o)}"
-  #         _ -> "#{o}"
-  #       end
-
-  #     _ ->
-  #       with args <- Enum.map(o, &glyph/1),
-  #            arg_str <- Enum.join(args, ",") do
-  #         arg_str
-  #       end
-  #   end
-  # end
 
   def task(sc = %SrcCall{}, results) do
     with args <- Enum.map(sc.args, fn arg -> replace_arg(arg, results) end) do
@@ -72,20 +60,6 @@ defmodule TwitchDiscordConnector.Template.SrcCall do
 
   def replace_arg(sc = %SrcCall{}, results), do: resolve_call(sc, results)
   def replace_arg(o, _), do: o
-
-  # def call(s = %SrcCall{}) do
-  #   with result <- Src.call(s.src, s.args) do
-  #     case s.keys do
-  #       [] ->
-  #         result
-
-  #       _ ->
-  #         Enum.reduce(s.keys, result, fn key, i_result ->
-  #           i_result[key]
-  #         end)
-  #     end
-  #   end
-  # end
 
   def depends_on(s = %SrcCall{}) do
     # L.d("depends_on(#{s})")
@@ -168,16 +142,19 @@ defmodule TwitchDiscordConnector.Template.SrcCall do
         x
     end)
   end
+end
 
-  defimpl Poison.Encoder, for: SrcCall do
-    def encode(%{src: s, args: args, keys: keys}, options) do
-      Poison.encode!(%{src: s.path, args: args, keys: keys}, options)
-    end
+defimpl Poison.Encoder, for: TwitchDiscordConnector.Template.SrcCall do
+  def encode(%{src: s, args: args, keys: keys}, options) do
+    Poison.encode!(%{src: s.path, args: args, keys: keys}, options)
   end
+end
 
-  defimpl String.Chars, for: SrcCall do
-    def to_string(s), do: "sCall{#{SrcCall.glyph(s)}}#{keys(s.keys)}"
-    def keys([]), do: ""
-    def keys(o), do: ".#{L.to_s(o)}"
-  end
+defimpl String.Chars, for: TwitchDiscordConnector.Template.SrcCall do
+  alias TwitchDiscordConnector.Template.SrcCall
+  alias TwitchDiscordConnector.Util.L
+
+  def to_string(s), do: "sCall{#{SrcCall.glyph(s)}}#{keys(s.keys)}"
+  def keys([]), do: ""
+  def keys(o), do: ".#{L.to_s(o)}"
 end

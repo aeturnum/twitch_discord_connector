@@ -3,6 +3,7 @@ defmodule TwitchDiscordConnector.HTTP.Static do
   Helper methods to serve static files.
   """
   alias TwitchDiscordConnector.HTTP.Headers
+  alias TwitchDiscordConnector.HTTP.Response
 
   @static_root [File.cwd!(), "priv"]
 
@@ -17,13 +18,10 @@ defmodule TwitchDiscordConnector.HTTP.Static do
   def resp_static(conn, path) do
     case File.exists?(path) do
       true ->
-        with {:ok, data} = File.read(path),
-             zdata <- :zlib.gzip(data),
-             # https://stackoverflow.com/questions/23600229/what-content-type-header-to-use-when-serving-gzipped-files
-             headers <- [mime: MIME.from_path(path), content_encoding: "gzip"] do
+        with {:ok, data} = File.read(path) do
           conn
-          |> Headers.add_headers_to_resp(headers)
-          |> Plug.Conn.send_resp(200, zdata)
+          |> Headers.add_headers_to_resp(mime: MIME.from_path(path))
+          |> Response.gzip_response(200, data)
         end
 
       false ->

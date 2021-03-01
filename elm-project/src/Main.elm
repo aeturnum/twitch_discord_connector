@@ -1,11 +1,8 @@
 module Main exposing (..)
 
 import Browser
-import Html exposing (..)
-import Html.Attributes exposing (..)
-import Layout exposing (layout)
-import State exposing (init, update)
+import Layout exposing (init, layout, subscriptions, update)
 
 
 main =
-    Browser.sandbox { init = init, update = update, view = layout }
+    Browser.element { init = init, update = update, subscriptions = subscriptions, view = layout }

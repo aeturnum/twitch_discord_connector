@@ -15,8 +15,8 @@ defmodule TwitchDiscordConnector.Template.SrcServer do
     GenServer.call(@name, {:exists, path})
   end
 
-  def list() do
-    GenServer.call(@name, :list)
+  def list(public_only \\ false) do
+    GenServer.call(@name, {:list, public_only})
   end
 
   def load(path) do
@@ -42,8 +42,19 @@ defmodule TwitchDiscordConnector.Template.SrcServer do
     {:noreply, state}
   end
 
-  def handle_call(:list, _from, state) do
-    {:reply, Map.values(state), state}
+  def handle_call({:list, public_only}, _from, state) do
+    {
+      :reply,
+      Map.values(state)
+      |> Enum.filter(fn src ->
+        if public_only do
+          src.public
+        else
+          true
+        end
+      end),
+      state
+    }
   end
 
   def handle_call({:load, path}, _from, state) do

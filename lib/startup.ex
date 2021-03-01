@@ -50,8 +50,7 @@ defmodule TwitchDiscordConnector.Startup do
           "https://static-cdn.jtvnw.net/jtv_user_pictures/a82d145d-f78d-43ea-ae54-8c4c46441bd3-profile_image-300x300.png",
         "type" => "",
         "view_count" => 10754
-      }
-      |> Poison.encode!(),
+      },
       &TwitchDiscordConnector.Twitch.User.info_name/1
     )
   end
@@ -65,8 +64,7 @@ defmodule TwitchDiscordConnector.Startup do
           "https://static-cdn.jtvnw.net/ttv-boxart/Pok%C3%A9mon%20GO-{width}x{height}.jpg",
         "id" => "490655",
         "name" => "Pokémon GO"
-      }
-      |> Poison.encode!(),
+      },
       &TwitchDiscordConnector.Twitch.User.game_info/1
     )
   end
@@ -93,8 +91,7 @@ defmodule TwitchDiscordConnector.Startup do
         "user_id" => "35634557",
         "user_name" => "th3six4ninja",
         "viewer_count" => 7
-      }
-      |> Poison.encode!(),
+      },
       &TwitchDiscordConnector.Twitch.User.streams_login/1
     )
   end

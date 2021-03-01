@@ -22,24 +22,44 @@ defmodule TwitchDiscordConnector.Views.Router do
   plug(:match)
   plug(:dispatch)
 
+  # SPA entry point
   get "/" do
-    Static.static(conn, path: ["index.html"])
+    conn
+    # |> Logger.log_call()
+    |> Static.static(path: ["index.html"])
   end
 
+  # endpoints for resources
+  # /acct/ - account
+  # /templ/ - templates
+
+  get "/templ/sources" do
+    conn
+    # |> Logger.log_call()
+    |> Routes.list_template_sources()
+  end
+
+  # Twitch callback endpoints
+
   get "/hook/stream" do
-    Routes.confirm_subscription(conn)
+    conn
     |> Logger.log_call()
+    |> Routes.confirm_subscription()
   end
 
   post "/hook/stream" do
     conn
     |> Plug.Conn.fetch_query_params()
-    |> Routes.handle_stream_notification()
     |> Logger.log_call()
+    |> Routes.handle_stream_notification()
   end
 
+  # static paths and 404s
+
   get "/*path" do
-    Static.static(conn, path: path)
+    conn
+    # |> Logger.log_call()
+    |> Static.static(path: path)
   end
 
   match _ do

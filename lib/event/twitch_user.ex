@@ -41,6 +41,14 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
   #    "view_count" => 632209
   #
   @doc """
+  handle_event has several prototypes:
+  handle_event({:send, :me}, {:user_info, info}, state) ->
+    Records the information that twitch sends us in `info`
+  handle_event({:send, :me}, {:subscribe, info}, state) ->
+    Records that we have an active user subscrption, unless the call
+    fails and then we subscribe again after 30s
+  handle_event({:send, :me}, {:delay_started, {:sub_delay, _}}, state) ->
+    Notification that a delay has been started on our behalf. We ignore this call.
   Save information for this twitch user.
   """
   def handle_event({:send, :me}, {:user_info, info}, state) do
@@ -59,11 +67,6 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
     }
   end
 
-  @doc """
-  Save subscription information
-
-  todo: record if the subscription has been confirmed or not.
-  """
   def handle_event({:send, :me}, {:subscribe, info}, state) do
     unwrap_result(info, state, %{
       :ok => fn sub ->
@@ -87,12 +90,9 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
   ## Delay Handles ###
   ####################
 
-  @doc """
-  Save information for this twitch user.
-  """
-  def handle_event({:send, :me}, {:delay_started, {:sub_delay, _}}, s) do
-    L.d("#{s}: Ignoring notification about sub_delay handle")
-    {:ok, s}
+  def handle_event({:send, :me}, {:delay_started, {:sub_delay, _}}, state) do
+    L.d("#{state}: Ignoring notification about sub_delay handle")
+    {:ok, state}
   end
 
   ######################
@@ -140,7 +140,7 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
   defp sub_call(s), do: {&Twitch.Subs.subscribe/2, [s.uid, 60 * 60 * 8]}
   # defp disc_call(s), do: {&Discord.webhook/1, [s.uid]}
 
-  defp unwrap_result(result, state, func_map \\ %{}) do
+  defp unwrap_result(result, state, func_map) do
     func_map = Map.put_new(func_map, :ok, fn x -> x end)
 
     case result do

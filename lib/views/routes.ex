@@ -3,15 +3,17 @@ defmodule TwitchDiscordConnector.Views.Routes do
   Route bodies
   """
 
-  # alias TwitchDiscordConnector.HTTP.Response
+  alias TwitchDiscordConnector.HTTP.Response
   alias TwitchDiscordConnector.Event
   alias TwitchDiscordConnector.Twitch.Subs
+  alias TwitchDiscordConnector.Template.SrcServer
+
   alias TwitchDiscordConnector.Util.L
 
-  # def status(conn, []) do
-  #   {:ok, %{"status" => "200 ok"}}
-  #   |> Response.send_response(conn)
-  # end
+  def list_template_sources(conn) do
+    {:ok, SrcServer.list(true)}
+    |> Response.send_response(conn)
+  end
 
   def confirm_subscription(conn) do
     with conn <- Plug.Conn.fetch_query_params(conn),

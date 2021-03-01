@@ -9,8 +9,7 @@ defmodule TwitchDiscordConnector.Template.Src do
             public: false
 
   alias TwitchDiscordConnector.Template.Src
-  alias TwitchDiscordConnector.Util.L
-  # alias TwitchDiscordConnector.Template.SrcServer
+  # alias TwitchDiscordConnector.Util.L
 
   def new(path, desc, sample, fcall, public \\ true) do
     info = Function.info(fcall)
@@ -24,8 +23,6 @@ defmodule TwitchDiscordConnector.Template.Src do
       function: Keyword.get(info, :name) |> Atom.to_string(),
       public: public
     }
-
-    # |> SrcServer.register()
   end
 
   def call(s = %Src{}, args) do
@@ -43,5 +40,14 @@ defmodule TwitchDiscordConnector.Template.Src do
 
   defimpl String.Chars, for: TwitchDiscordConnector.Template.Src do
     def to_string(s), do: "Src|#{s.path}|#{s.module}.#{s.function}>"
+  end
+end
+
+defimpl Poison.Encoder, for: TwitchDiscordConnector.Template.Src do
+  alias TwitchDiscordConnector.Template.Src
+
+  def encode(s = %Src{}, options) do
+    %{path: s.path, name: s.name, description: s.description, sample: s.sample}
+    |> Poison.encode!(options)
   end
 end

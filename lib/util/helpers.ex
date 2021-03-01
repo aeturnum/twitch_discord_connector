@@ -3,7 +3,7 @@ defmodule TwitchDiscordConnector.Util.H do
   Random Helpers
   """
 
-  alias TwitchDiscordConnector.Util.L
+  # alias TwitchDiscordConnector.Util.L
 
   # https://stackoverflow.com/questions/32001606/how-to-generate-a-random-url-safe-string-with-elixir
   def random_string(length) do

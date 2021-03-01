@@ -9,25 +9,25 @@ defmodule TwitchDiscordConnector.HTTP.Logger do
 
   def init(opts), do: opts
 
-  def log_call(conn), do: Map.put(conn, :log_me, :yes)
+  def log_call(conn), do: Plug.Conn.assign(conn, :log_me, :yes)
 
   def call(conn, _opts) do
     start = System.monotonic_time()
 
-    Conn.register_before_send(conn, fn conn ->
-      case Map.get(conn, :log_me, :no) do
+    Conn.register_before_send(conn, fn post_conn ->
+      case post_conn.assigns[:log_me] do
         :yes ->
           Logger.log(:info, fn ->
             stop = System.monotonic_time()
             diff = System.convert_time_unit(stop - start, :native, :microsecond)
 
-            [request_info(conn, diff)]
+            [request_info(post_conn, diff)]
           end)
 
-          conn
+          post_conn
 
         _ ->
-          conn
+          post_conn
       end
     end)
   end
