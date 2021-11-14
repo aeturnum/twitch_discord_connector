@@ -29,6 +29,11 @@ defmodule TwitchDiscordConnector.Views.Router do
     |> Static.static(path: ["index.html"])
   end
 
+  get "/live" do
+    conn
+    |> Routes.live()
+  end
+
   # endpoints for resources
   # /acct/ - account
   # /templ/ - templates

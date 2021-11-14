@@ -7,8 +7,13 @@ defmodule TwitchDiscordConnector.Views.Routes do
   alias TwitchDiscordConnector.Event
   alias TwitchDiscordConnector.Twitch.Subs
   alias TwitchDiscordConnector.Template.SrcServer
+  alias TwitchDiscordConnector.Util.Live
 
   alias TwitchDiscordConnector.Util.L
+
+  def live(conn) do
+    Plug.Conn.send_resp(conn, 200, Live.get_ref())
+  end
 
   def list_template_sources(conn) do
     {:ok, SrcServer.list(true)}

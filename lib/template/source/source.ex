@@ -37,10 +37,10 @@ defmodule TwitchDiscordConnector.Template.Src do
       end
     end
   end
+end
 
-  defimpl String.Chars, for: TwitchDiscordConnector.Template.Src do
-    def to_string(s), do: "Src|#{s.path}|#{s.module}.#{s.function}>"
-  end
+defimpl String.Chars, for: TwitchDiscordConnector.Template.Src do
+  def to_string(s), do: "Src|#{s.path}|#{s.module}.#{s.function}>"
 end
 
 defimpl Poison.Encoder, for: TwitchDiscordConnector.Template.Src do

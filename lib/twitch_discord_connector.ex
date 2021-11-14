@@ -27,6 +27,7 @@ defmodule TwitchDiscordConnector do
     [
       {TwitchDiscordConnector.JsonDB, settings(:init_jsondb)},
       {TwitchDiscordConnector.Event, settings(:init_event)},
+      {TwitchDiscordConnector.Util.Live, []},
       {TwitchDiscordConnector.Template.SrcServer, settings(:init_srcserver)}
     ]
     |> Supervisor.start_link(strategy: :one_for_one, name: TwitchDiscordConnector.Supervisor)
@@ -36,10 +37,8 @@ defmodule TwitchDiscordConnector do
 
   defp external_processes(_) do
     [
-      {
-        Plug.Cowboy,
-        scheme: :http, plug: TwitchDiscordConnector.Views.Router, options: [port: 4000]
-      }
+      {Plug.Cowboy, scheme: :http, plug: TwitchDiscordConnector.Views.Router, options: [port: 4000]},
+      {TwitchDiscordConnector.Twitch.Bot, settings(:init_bot)}
     ]
   end
 

@@ -9,13 +9,16 @@ defmodule TwitchDiscordConnector.Event.DiscEvents do
   alias TwitchDiscordConnector.Discord
 
   # state: {user id, hook url, [keyword list]}
-  def init(user_id) do
-    with %{uid: uid, hook: hook_url} <- TwitchUserDB.load_user(user_id) do
-      case hook_url do
-        nil -> {uid, []}
-        value -> {uid, [hook: value]}
-      end
-    end
+  def init({user_id, user_info}) do
+    {
+      user_id,
+      %{
+        user: user_info,
+        hook: user_info.hook,
+        last_stream: nil,
+      }
+    }
+
   end
 
   def channel(), do: :discord_manager
@@ -23,6 +26,10 @@ defmodule TwitchDiscordConnector.Event.DiscEvents do
   #############
   ## Events ###
   #############
+
+  # def handle_event({:send, :event}, {:added, _}, s) do
+  #   {delay_asking_for_info()}, s}
+  # end
 
   #   {:ok,
   #  %{
@@ -42,20 +49,29 @@ defmodule TwitchDiscordConnector.Event.DiscEvents do
   Send discord hook in response to stream, unless we've already sent a notification for this stream.
   """
   def handle_event({_, :twitch}, {:stream, {:up, eid, info}}, s = {uid, data}) when eid == uid do
-    case Keyword.get(data, :last_stream, nil) == info["started_at"] do
+    case data.last_stream == info["started_at"] do
       true ->
         {:ok, s}
 
       false ->
         {
           do_disc_hook(s),
-          {uid, Keyword.put(data, :last_stream, info["started_at"])}
+          {uid, Map.put(data, :last_stream, info["started_at"])}
         }
     end
   end
 
   # default
   def handle_event(_), do: :ignore
+
+  defp delay_asking_for_info() do
+    {
+      :in,
+      :info_wait,
+      3 * 1000 ,
+      {:send, :me, :get_info, nil}
+    }
+  end
 
   defp do_disc_hook(s) do
     {
@@ -66,13 +82,6 @@ defmodule TwitchDiscordConnector.Event.DiscEvents do
     }
   end
 
-  defp disc_call({uid, data}) do
-    case Keyword.get(data, :hook, nil) do
-      nil ->
-        {&Discord.fake_hook/1, [uid]}
-
-      hook ->
-        {&Discord.webhook/2, [uid, hook]}
-    end
-  end
+  defp disc_call({uid, %{hook: nil}}), do: {&Discord.fake_hook/1, [uid]}
+  defp disc_call({uid, %{hook: hook}}), do: {&Discord.webhook/2, [uid, hook]}
 end

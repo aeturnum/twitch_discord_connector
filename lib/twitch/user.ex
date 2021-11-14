@@ -34,8 +34,11 @@ defmodule TwitchDiscordConnector.Twitch.User do
         {:ok, user}
 
       # o h n o
+      {:error, _, real_error} ->
+        IO.puts("Failed to fetch user(#{inspect(params)}) info for some reason: #{inspect(real_error)}")
+        {:error, real_error}
       other ->
-        IO.puts("Failed to fetch user(#{params}) info for some reason: #{inspect(other)}")
+        IO.puts("Failed to fetch user(#{inspect(params)}) info for some reason: #{inspect(other)}")
         {:error, other}
     end
   end
@@ -59,6 +62,9 @@ defmodule TwitchDiscordConnector.Twitch.User do
         {:ok, game}
 
       # o h n o
+      {:error, _, real_error} ->
+        IO.puts("Failed to fetch game(#{id}) info for some reason: #{inspect(real_error)}")
+        {:error, real_error}
       other ->
         IO.puts("Failed to fetch game(#{id}) info for some reason: #{inspect(other)}")
         {:error, other}
@@ -100,8 +106,11 @@ defmodule TwitchDiscordConnector.Twitch.User do
         {:ok, Enum.take(streams, 1)}
 
       # o h n o
+      {:error, _, real_error} ->
+        IO.puts("Failed to fetch stream (#{inspect(params)}) info for some reason: #{inspect(real_error)}")
+        {:error, real_error}
       other ->
-        IO.puts("Failed to fetch stream (#{params}) info for some reason: #{inspect(other)}")
+        IO.puts("Failed to fetch stream (#{inspect(params)}) info for some reason: #{inspect(other)}")
         {:error, other}
     end
   end

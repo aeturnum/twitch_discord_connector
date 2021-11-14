@@ -5,6 +5,9 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
   alias TwitchDiscordConnector.Util.H
   alias TwitchDiscordConnector.Util.Expires
   alias TwitchDiscordConnector.Util.L
+  alias TwitchDiscordConnector.Util.Live
+  alias TwitchDiscordConnector.Twitch.Bot
+  alias TwitchDiscordConnector.Event.Helpers
 
   # opts = {info, flags = %{}}
   def init(user_id) do
@@ -20,9 +23,14 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
 
   # startup event
   def handle_event({:send, :event}, {:added, _}, s) do
-    {[], s}
-    |> maybe_get_info()
-    |> schedule_sub_and_return()
+    if Live.is_live() do
+      {[], s}
+      |> maybe_get_info()
+      |> schedule_sub_and_return()
+    else
+      {[], s}
+      |> maybe_get_info()
+    end
   end
 
   ##################
@@ -52,19 +60,17 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
   Save information for this twitch user.
   """
   def handle_event({:send, :me}, {:user_info, info}, state) do
-    {
-      :ok,
-      unwrap_result(info, state, %{
-        :ok => fn uinfo ->
-          %{state | info: %{} |> H.grab_keys(uinfo, ["login", "display_name", "description"])}
-          |> TwitchUserDB.save_user()
-        end,
-        :error => fn err ->
-          L.e("Error getting user info: #{inspect(err)}")
-          {[], state} |> maybe_get_info()
+    unwrap_result(info, state, %{
+      :ok => fn uinfo ->
+        with new_state <- TwitchUserDB.save_user_info(state, uinfo) do
+          {info_broadcast(new_state), new_state}
         end
-      })
-    }
+      end,
+      :error => fn err ->
+        L.e("Error getting user info: #{inspect(err)}")
+        {[], state} |> maybe_get_info()
+      end
+    })
   end
 
   def handle_event({:send, :me}, {:subscribe, info}, state) do
@@ -74,7 +80,16 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
           {sub_later(new_state), new_state}
         end
       end,
-      :error => fn error_info ->
+      :error => fn {code, error_info} ->
+        case code do
+          401 ->
+            # really we should have a job do this...
+            Twitch.Auth.refresh_auth()
+
+          _ ->
+            nil
+        end
+
         L.e("Error subbing: #{inspect(error_info)}")
         {sub_later(state, 30 * 1000), state}
       end
@@ -106,6 +121,7 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
   ## Helpers ####
   ###############
 
+  # get info if it's nil
   defp maybe_get_info({a, s = %{info: nil}}) do
     {
       [{:job, :me, :user_info, info_call(s)} | a],
@@ -113,7 +129,13 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
     }
   end
 
-  defp maybe_get_info({a, s}), do: {a, s}
+  # broadcast info if we have it
+  defp maybe_get_info({a, s}) do
+    {
+       [ info_broadcast(s) | a],
+       s
+    }
+  end
 
   defp schedule_sub_and_return({a, s = %{info: nil}}) do
     {
@@ -136,6 +158,9 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
   defp sub_job(s), do: {:job, :me, :subscribe, sub_call(s)}
   # defp do_disc_hook(s), do: {:in, :disc_delay, 60 * 1000 * 3, {:job, :me, :hook, disc_call(s)}}
 
+  defp info_broadcast(s) do
+    {:brod, :twitch_user_info, s}
+  end
   defp info_call(s), do: {&Twitch.User.info_id/1, [s.uid]}
   defp sub_call(s), do: {&Twitch.Subs.subscribe/2, [s.uid, 60 * 60 * 8]}
   # defp disc_call(s), do: {&Discord.webhook/1, [s.uid]}

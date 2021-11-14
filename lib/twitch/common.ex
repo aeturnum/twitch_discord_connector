@@ -53,7 +53,8 @@ defmodule TwitchDiscordConnector.Twitch.Common do
     encode_params(args.url, args.params)
     |> HTTPoison.post(
       Poison.encode!(args.body),
-      [{"Content-Type", "application/json"}] ++ args.headers
+      [{"Content-Type", "application/json"}] ++ args.headers#,
+      # [ssl: [{:verify,  :verify_none}, {:certfile, '/usr/local/etc/openssl/cert.pem'}]]
     )
     |> log_request(args)
     |> decode_body()
@@ -70,7 +71,7 @@ defmodule TwitchDiscordConnector.Twitch.Common do
     |> handle_response()
   end
 
-  defp log_request(r, %{print: _}), do: IO.inspect(r)
+  defp log_request(r, %{print: _}), do: IO.inspect(r, label: "request")
   defp log_request(r, _), do: r
 
   defp encode_params(url, map) when map == %{}, do: url

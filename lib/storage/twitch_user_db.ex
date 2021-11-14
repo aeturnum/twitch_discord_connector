@@ -12,6 +12,7 @@ defmodule TwitchDiscordConnector.JsonDB.TwitchUserDB do
   alias TwitchDiscordConnector.Util.H
 
   @dbkey "twitch_users"
+  @twitch_info_fields ["login", "display_name", "description"]
 
   @doc """
   Get all user ids stored under the global key
@@ -36,6 +37,13 @@ defmodule TwitchDiscordConnector.JsonDB.TwitchUserDB do
     )
 
     user
+  end
+
+  def save_user_info(user, info_from_twitch) do
+    with info_fields <- H.grab_keys(%{}, info_from_twitch, @twitch_info_fields) do
+      %{user | info: info_fields}
+      |> save_user()
+    end
   end
 
   @doc """

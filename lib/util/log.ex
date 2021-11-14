@@ -9,11 +9,17 @@ defmodule TwitchDiscordConnector.Util.L do
 
   # Thank you to: https://timber.io/blog/the-ultimate-guide-to-logging-in-elixir/
 
-  def format(level, message, timestamp, _metadata) do
-    "#{fmt_timestamp(timestamp)} [#{level}]  #{message}\n"
+  def format(level_atom, message, timestamp, _metadata) do
+    "|#{level(level_atom)}]#{fmt_timestamp(timestamp)}] #{message}\n"
   rescue
-    _ -> "could not format message: #{inspect({level, message, timestamp})}\n"
+    _ -> "could not format message: #{inspect({level_atom, message, timestamp})}\n"
   end
+
+  defp level(:debug), do: "D"
+  defp level(:info), do: "I"
+  defp level(:warn), do: "W"
+  defp level(:warning), do: "W"
+  defp level(:error), do: "E"
 
   defp fmt_timestamp({date, {hh, mm, ss, ms}}) do
     with {:ok, timestamp} <- NaiveDateTime.from_erl({date, {hh, mm, ss}}, {ms * 1000, 2}),

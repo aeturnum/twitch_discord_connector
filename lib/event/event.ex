@@ -15,8 +15,8 @@ defmodule TwitchDiscordConnector.Event do
     {[actions], new_state}
   actions:
     {:brod, name, data \\ nil}
-    {:send, to, name, data \\ nil} # to can be :me
-    {:job, to, name, {function, args}} # to can be :me, :brod or addr
+    {:send, to, name, data \\ nil} # `to` can be :me or addr
+    {:job, to, name, {function, args}} # `to` can be :me, :brod or addr
     {:in, ms, what} # what can be any action
     {:cancel, delay_id} # cancel a delay task
   callback format:
@@ -298,7 +298,7 @@ defmodule TwitchDiscordConnector.Event do
 
   defp do_job({f, args}, to, {job_channel, name, from}) do
     # L.d("Running job[#{inspect(name)}]...")
-    r = apply(f, args)
+    r = do_apply(f, args)
     L.d("Job[#{inspect(name)}] #{inspect(f)}(#{inspect(args)}) -> #{inspect(r, pretty: true)}")
 
     case to do
@@ -336,11 +336,10 @@ defmodule TwitchDiscordConnector.Event do
 
             :ignore
 
-          _ ->
+          other ->
             L.e(
-              "Unknown error when calling (#{inspect(ctx)}, #{inspect(event)}, state) on #{
-                lis_s(lis)
-              }"
+              "Unknown error when calling (#{inspect(ctx)}, #{inspect(event)}, state)
+              on #{lis_s(lis)}: #{inspect(other)}"
             )
 
             :ignore
@@ -379,6 +378,7 @@ defmodule TwitchDiscordConnector.Event do
   end
 
   defp norm_action(a = {:brod, _}, _), do: Tuple.append(a, nil)
+  defp norm_action(a = {:brod, _, _}, _), do: a
   defp norm_action({:send, to, name}, my_id), do: {:send, to_addr(to, my_id), name, nil}
   defp norm_action({:send, to, name, data}, my_id), do: {:send, to_addr(to, my_id), name, data}
   defp norm_action({:in, name, ms, what}, _), do: {:delay, name, ms, what}
@@ -467,6 +467,9 @@ defmodule TwitchDiscordConnector.Event do
       end
     )
   end
+
+  defp do_apply(f, args) when is_list(args), do: apply(f, args)
+  defp do_apply(f, arg), do: apply(f, [arg])
 
   defp lis_s({m_id, _mod, m_ch, _last_state}), do: "#{m_ch}[#{m_id}]"
 end

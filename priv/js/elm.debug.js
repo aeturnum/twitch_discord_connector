@@ -4940,180 +4940,106 @@ function _Browser_load(url)
 }
 
 
+// CREATE
 
-// SEND REQUEST
+var _Regex_never = /.^/;
 
-var _Http_toTask = F3(function(router, toTask, request)
+var _Regex_fromStringWith = F2(function(options, string)
 {
-	return _Scheduler_binding(function(callback)
+	var flags = 'g';
+	if (options.multiline) { flags += 'm'; }
+	if (options.caseInsensitive) { flags += 'i'; }
+
+	try
 	{
-		function done(response) {
-			callback(toTask(request.expect.a(response)));
-		}
-
-		var xhr = new XMLHttpRequest();
-		xhr.addEventListener('error', function() { done($elm$http$Http$NetworkError_); });
-		xhr.addEventListener('timeout', function() { done($elm$http$Http$Timeout_); });
-		xhr.addEventListener('load', function() { done(_Http_toResponse(request.expect.b, xhr)); });
-		$elm$core$Maybe$isJust(request.tracker) && _Http_track(router, xhr, request.tracker.a);
-
-		try {
-			xhr.open(request.method, request.url, true);
-		} catch (e) {
-			return done($elm$http$Http$BadUrl_(request.url));
-		}
-
-		_Http_configureRequest(xhr, request);
-
-		request.body.a && xhr.setRequestHeader('Content-Type', request.body.a);
-		xhr.send(request.body.b);
-
-		return function() { xhr.c = true; xhr.abort(); };
-	});
+		return $elm$core$Maybe$Just(new RegExp(string, flags));
+	}
+	catch(error)
+	{
+		return $elm$core$Maybe$Nothing;
+	}
 });
 
 
-// CONFIGURE
+// USE
 
-function _Http_configureRequest(xhr, request)
+var _Regex_contains = F2(function(re, string)
 {
-	for (var headers = request.headers; headers.b; headers = headers.b) // WHILE_CONS
+	return string.match(re) !== null;
+});
+
+
+var _Regex_findAtMost = F3(function(n, re, str)
+{
+	var out = [];
+	var number = 0;
+	var string = str;
+	var lastIndex = re.lastIndex;
+	var prevLastIndex = -1;
+	var result;
+	while (number++ < n && (result = re.exec(string)))
 	{
-		xhr.setRequestHeader(headers.a.a, headers.a.b);
-	}
-	xhr.timeout = request.timeout.a || 0;
-	xhr.responseType = request.expect.d;
-	xhr.withCredentials = request.allowCookiesFromOtherDomains;
-}
-
-
-// RESPONSES
-
-function _Http_toResponse(toBody, xhr)
-{
-	return A2(
-		200 <= xhr.status && xhr.status < 300 ? $elm$http$Http$GoodStatus_ : $elm$http$Http$BadStatus_,
-		_Http_toMetadata(xhr),
-		toBody(xhr.response)
-	);
-}
-
-
-// METADATA
-
-function _Http_toMetadata(xhr)
-{
-	return {
-		url: xhr.responseURL,
-		statusCode: xhr.status,
-		statusText: xhr.statusText,
-		headers: _Http_parseHeaders(xhr.getAllResponseHeaders())
-	};
-}
-
-
-// HEADERS
-
-function _Http_parseHeaders(rawHeaders)
-{
-	if (!rawHeaders)
-	{
-		return $elm$core$Dict$empty;
-	}
-
-	var headers = $elm$core$Dict$empty;
-	var headerPairs = rawHeaders.split('\r\n');
-	for (var i = headerPairs.length; i--; )
-	{
-		var headerPair = headerPairs[i];
-		var index = headerPair.indexOf(': ');
-		if (index > 0)
+		if (prevLastIndex == re.lastIndex) break;
+		var i = result.length - 1;
+		var subs = new Array(i);
+		while (i > 0)
 		{
-			var key = headerPair.substring(0, index);
-			var value = headerPair.substring(index + 2);
-
-			headers = A3($elm$core$Dict$update, key, function(oldValue) {
-				return $elm$core$Maybe$Just($elm$core$Maybe$isJust(oldValue)
-					? value + ', ' + oldValue.a
-					: value
-				);
-			}, headers);
+			var submatch = result[i];
+			subs[--i] = submatch
+				? $elm$core$Maybe$Just(submatch)
+				: $elm$core$Maybe$Nothing;
 		}
+		out.push(A4($elm$regex$Regex$Match, result[0], result.index, number, _List_fromArray(subs)));
+		prevLastIndex = re.lastIndex;
 	}
-	return headers;
-}
-
-
-// EXPECT
-
-var _Http_expect = F3(function(type, toBody, toValue)
-{
-	return {
-		$: 0,
-		d: type,
-		b: toBody,
-		a: toValue
-	};
+	re.lastIndex = lastIndex;
+	return _List_fromArray(out);
 });
 
-var _Http_mapExpect = F2(function(func, expect)
+
+var _Regex_replaceAtMost = F4(function(n, re, replacer, string)
 {
-	return {
-		$: 0,
-		d: expect.d,
-		b: expect.b,
-		a: function(x) { return func(expect.a(x)); }
-	};
-});
-
-function _Http_toDataView(arrayBuffer)
-{
-	return new DataView(arrayBuffer);
-}
-
-
-// BODY and PARTS
-
-var _Http_emptyBody = { $: 0 };
-var _Http_pair = F2(function(a, b) { return { $: 0, a: a, b: b }; });
-
-function _Http_toFormData(parts)
-{
-	for (var formData = new FormData(); parts.b; parts = parts.b) // WHILE_CONS
+	var count = 0;
+	function jsReplacer(match)
 	{
-		var part = parts.a;
-		formData.append(part.a, part.b);
+		if (count++ >= n)
+		{
+			return match;
+		}
+		var i = arguments.length - 3;
+		var submatches = new Array(i);
+		while (i > 0)
+		{
+			var submatch = arguments[i];
+			submatches[--i] = submatch
+				? $elm$core$Maybe$Just(submatch)
+				: $elm$core$Maybe$Nothing;
+		}
+		return replacer(A4($elm$regex$Regex$Match, match, arguments[arguments.length - 2], count, _List_fromArray(submatches)));
 	}
-	return formData;
-}
-
-var _Http_bytesToBlob = F2(function(mime, bytes)
-{
-	return new Blob([bytes], { type: mime });
+	return string.replace(re, jsReplacer);
 });
 
-
-// PROGRESS
-
-function _Http_track(router, xhr, tracker)
+var _Regex_splitAtMost = F3(function(n, re, str)
 {
-	// TODO check out lengthComputable on loadstart event
+	var string = str;
+	var out = [];
+	var start = re.lastIndex;
+	var restoreLastIndex = re.lastIndex;
+	while (n--)
+	{
+		var result = re.exec(string);
+		if (!result) break;
+		out.push(string.slice(start, result.index));
+		start = re.lastIndex;
+	}
+	out.push(string.slice(start));
+	re.lastIndex = restoreLastIndex;
+	return _List_fromArray(out);
+});
 
-	xhr.upload.addEventListener('progress', function(event) {
-		if (xhr.c) { return; }
-		_Scheduler_rawSpawn(A2($elm$core$Platform$sendToSelf, router, _Utils_Tuple2(tracker, $elm$http$Http$Sending({
-			sent: event.loaded,
-			size: event.total
-		}))));
-	});
-	xhr.addEventListener('progress', function(event) {
-		if (xhr.c) { return; }
-		_Scheduler_rawSpawn(A2($elm$core$Platform$sendToSelf, router, _Utils_Tuple2(tracker, $elm$http$Http$Receiving({
-			received: event.loaded,
-			size: event.lengthComputable ? $elm$core$Maybe$Just(event.total) : $elm$core$Maybe$Nothing
-		}))));
-	});
-}var $elm$core$Basics$EQ = {$: 'EQ'};
+var _Regex_infinity = Infinity;
+var $elm$core$Basics$EQ = {$: 'EQ'};
 var $elm$core$Basics$GT = {$: 'GT'};
 var $elm$core$Basics$LT = {$: 'LT'};
 var $elm$core$List$cons = _List_cons;
@@ -10711,353 +10637,139 @@ var $elm$core$Basics$never = function (_v0) {
 	}
 };
 var $elm$browser$Browser$element = _Browser_element;
-var $author$project$Layout$Sources = function (a) {
-	return {$: 'Sources', a: a};
-};
-var $elm$http$Http$BadStatus_ = F2(
-	function (a, b) {
-		return {$: 'BadStatus_', a: a, b: b};
-	});
-var $elm$http$Http$BadUrl_ = function (a) {
-	return {$: 'BadUrl_', a: a};
-};
-var $elm$http$Http$GoodStatus_ = F2(
-	function (a, b) {
-		return {$: 'GoodStatus_', a: a, b: b};
-	});
-var $elm$http$Http$NetworkError_ = {$: 'NetworkError_'};
-var $elm$http$Http$Receiving = function (a) {
-	return {$: 'Receiving', a: a};
-};
-var $elm$http$Http$Sending = function (a) {
-	return {$: 'Sending', a: a};
-};
-var $elm$http$Http$Timeout_ = {$: 'Timeout_'};
-var $elm$core$Maybe$isJust = function (maybe) {
-	if (maybe.$ === 'Just') {
-		return true;
-	} else {
-		return false;
-	}
-};
-var $elm$core$Platform$sendToSelf = _Platform_sendToSelf;
-var $elm$http$Http$expectStringResponse = F2(
-	function (toMsg, toResult) {
-		return A3(
-			_Http_expect,
-			'',
-			$elm$core$Basics$identity,
-			A2($elm$core$Basics$composeR, toResult, toMsg));
-	});
-var $elm$core$Result$mapError = F2(
-	function (f, result) {
-		if (result.$ === 'Ok') {
-			var v = result.a;
-			return $elm$core$Result$Ok(v);
-		} else {
-			var e = result.a;
-			return $elm$core$Result$Err(
-				f(e));
-		}
-	});
-var $elm$http$Http$BadBody = function (a) {
-	return {$: 'BadBody', a: a};
-};
-var $elm$http$Http$BadStatus = function (a) {
-	return {$: 'BadStatus', a: a};
-};
-var $elm$http$Http$BadUrl = function (a) {
-	return {$: 'BadUrl', a: a};
-};
-var $elm$http$Http$NetworkError = {$: 'NetworkError'};
-var $elm$http$Http$Timeout = {$: 'Timeout'};
-var $elm$http$Http$resolve = F2(
-	function (toResult, response) {
-		switch (response.$) {
-			case 'BadUrl_':
-				var url = response.a;
-				return $elm$core$Result$Err(
-					$elm$http$Http$BadUrl(url));
-			case 'Timeout_':
-				return $elm$core$Result$Err($elm$http$Http$Timeout);
-			case 'NetworkError_':
-				return $elm$core$Result$Err($elm$http$Http$NetworkError);
-			case 'BadStatus_':
-				var metadata = response.a;
-				return $elm$core$Result$Err(
-					$elm$http$Http$BadStatus(metadata.statusCode));
-			default:
-				var body = response.b;
-				return A2(
-					$elm$core$Result$mapError,
-					$elm$http$Http$BadBody,
-					toResult(body));
-		}
-	});
-var $elm$http$Http$expectJson = F2(
-	function (toMsg, decoder) {
-		return A2(
-			$elm$http$Http$expectStringResponse,
-			toMsg,
-			$elm$http$Http$resolve(
-				function (string) {
-					return A2(
-						$elm$core$Result$mapError,
-						$elm$json$Json$Decode$errorToString,
-						A2($elm$json$Json$Decode$decodeString, decoder, string));
-				}));
-	});
-var $elm$http$Http$emptyBody = _Http_emptyBody;
-var $elm$http$Http$Request = function (a) {
-	return {$: 'Request', a: a};
-};
-var $elm$http$Http$State = F2(
-	function (reqs, subs) {
-		return {reqs: reqs, subs: subs};
-	});
-var $elm$http$Http$init = $elm$core$Task$succeed(
-	A2($elm$http$Http$State, $elm$core$Dict$empty, _List_Nil));
-var $elm$core$Process$kill = _Scheduler_kill;
-var $elm$core$Process$spawn = _Scheduler_spawn;
-var $elm$http$Http$updateReqs = F3(
-	function (router, cmds, reqs) {
-		updateReqs:
-		while (true) {
-			if (!cmds.b) {
-				return $elm$core$Task$succeed(reqs);
-			} else {
-				var cmd = cmds.a;
-				var otherCmds = cmds.b;
-				if (cmd.$ === 'Cancel') {
-					var tracker = cmd.a;
-					var _v2 = A2($elm$core$Dict$get, tracker, reqs);
-					if (_v2.$ === 'Nothing') {
-						var $temp$router = router,
-							$temp$cmds = otherCmds,
-							$temp$reqs = reqs;
-						router = $temp$router;
-						cmds = $temp$cmds;
-						reqs = $temp$reqs;
-						continue updateReqs;
-					} else {
-						var pid = _v2.a;
-						return A2(
-							$elm$core$Task$andThen,
-							function (_v3) {
-								return A3(
-									$elm$http$Http$updateReqs,
-									router,
-									otherCmds,
-									A2($elm$core$Dict$remove, tracker, reqs));
-							},
-							$elm$core$Process$kill(pid));
-					}
-				} else {
-					var req = cmd.a;
-					return A2(
-						$elm$core$Task$andThen,
-						function (pid) {
-							var _v4 = req.tracker;
-							if (_v4.$ === 'Nothing') {
-								return A3($elm$http$Http$updateReqs, router, otherCmds, reqs);
-							} else {
-								var tracker = _v4.a;
-								return A3(
-									$elm$http$Http$updateReqs,
-									router,
-									otherCmds,
-									A3($elm$core$Dict$insert, tracker, pid, reqs));
-							}
-						},
-						$elm$core$Process$spawn(
-							A3(
-								_Http_toTask,
-								router,
-								$elm$core$Platform$sendToApp(router),
-								req)));
-				}
-			}
-		}
-	});
-var $elm$http$Http$onEffects = F4(
-	function (router, cmds, subs, state) {
-		return A2(
-			$elm$core$Task$andThen,
-			function (reqs) {
-				return $elm$core$Task$succeed(
-					A2($elm$http$Http$State, reqs, subs));
-			},
-			A3($elm$http$Http$updateReqs, router, cmds, state.reqs));
-	});
-var $elm$http$Http$maybeSend = F4(
-	function (router, desiredTracker, progress, _v0) {
-		var actualTracker = _v0.a;
-		var toMsg = _v0.b;
-		return _Utils_eq(desiredTracker, actualTracker) ? $elm$core$Maybe$Just(
-			A2(
-				$elm$core$Platform$sendToApp,
-				router,
-				toMsg(progress))) : $elm$core$Maybe$Nothing;
-	});
-var $elm$http$Http$onSelfMsg = F3(
-	function (router, _v0, state) {
-		var tracker = _v0.a;
-		var progress = _v0.b;
-		return A2(
-			$elm$core$Task$andThen,
-			function (_v1) {
-				return $elm$core$Task$succeed(state);
-			},
-			$elm$core$Task$sequence(
-				A2(
-					$elm$core$List$filterMap,
-					A3($elm$http$Http$maybeSend, router, tracker, progress),
-					state.subs)));
-	});
-var $elm$http$Http$Cancel = function (a) {
-	return {$: 'Cancel', a: a};
-};
-var $elm$http$Http$cmdMap = F2(
-	function (func, cmd) {
-		if (cmd.$ === 'Cancel') {
-			var tracker = cmd.a;
-			return $elm$http$Http$Cancel(tracker);
-		} else {
-			var r = cmd.a;
-			return $elm$http$Http$Request(
-				{
-					allowCookiesFromOtherDomains: r.allowCookiesFromOtherDomains,
-					body: r.body,
-					expect: A2(_Http_mapExpect, func, r.expect),
-					headers: r.headers,
-					method: r.method,
-					timeout: r.timeout,
-					tracker: r.tracker,
-					url: r.url
-				});
-		}
-	});
-var $elm$http$Http$MySub = F2(
-	function (a, b) {
-		return {$: 'MySub', a: a, b: b};
-	});
-var $elm$http$Http$subMap = F2(
-	function (func, _v0) {
-		var tracker = _v0.a;
-		var toMsg = _v0.b;
-		return A2(
-			$elm$http$Http$MySub,
-			tracker,
-			A2($elm$core$Basics$composeR, toMsg, func));
-	});
-_Platform_effectManagers['Http'] = _Platform_createManager($elm$http$Http$init, $elm$http$Http$onEffects, $elm$http$Http$onSelfMsg, $elm$http$Http$cmdMap, $elm$http$Http$subMap);
-var $elm$http$Http$command = _Platform_leaf('Http');
-var $elm$http$Http$subscription = _Platform_leaf('Http');
-var $elm$http$Http$request = function (r) {
-	return $elm$http$Http$command(
-		$elm$http$Http$Request(
-			{allowCookiesFromOtherDomains: false, body: r.body, expect: r.expect, headers: r.headers, method: r.method, timeout: r.timeout, tracker: r.tracker, url: r.url}));
-};
-var $elm$http$Http$get = function (r) {
-	return $elm$http$Http$request(
-		{body: $elm$http$Http$emptyBody, expect: r.expect, headers: _List_Nil, method: 'GET', timeout: $elm$core$Maybe$Nothing, tracker: $elm$core$Maybe$Nothing, url: r.url});
-};
-var $author$project$Layout$Src = F4(
-	function (name, path, sample, description) {
-		return {description: description, name: name, path: path, sample: sample};
-	});
-var $author$project$Helpers$JsonValue$JsonArray = function (a) {
-	return {$: 'JsonArray', a: a};
-};
-var $author$project$Helpers$JsonValue$JsonBoolean = function (a) {
-	return {$: 'JsonBoolean', a: a};
-};
-var $author$project$Helpers$JsonValue$JsonFloat = function (a) {
-	return {$: 'JsonFloat', a: a};
-};
-var $author$project$Helpers$JsonValue$JsonInt = function (a) {
-	return {$: 'JsonInt', a: a};
-};
-var $author$project$Helpers$JsonValue$JsonNull = {$: 'JsonNull'};
 var $author$project$Helpers$JsonValue$JsonObject = function (a) {
 	return {$: 'JsonObject', a: a};
 };
-var $author$project$Helpers$JsonValue$JsonString = function (a) {
-	return {$: 'JsonString', a: a};
+var $author$project$Template$Model$Literal = function (a) {
+	return {$: 'Literal', a: a};
 };
-var $elm$json$Json$Decode$bool = _Json_decodeBool;
-var $elm$json$Json$Decode$andThen = _Json_andThen;
-var $elm$json$Json$Decode$lazy = function (thunk) {
-	return A2(
-		$elm$json$Json$Decode$andThen,
-		thunk,
-		$elm$json$Json$Decode$succeed(_Utils_Tuple0));
+var $author$project$Dropdowns$Model$makeDropDownState = function (entries) {
+	return $elm$core$Dict$fromList(entries);
 };
-var $elm$json$Json$Decode$null = _Json_decodeNull;
-var $elm$json$Json$Decode$oneOf = _Json_oneOf;
-function $author$project$Helpers$JsonValue$cyclic$decoder() {
-	return $elm$json$Json$Decode$oneOf(
+var $author$project$Template$Model$makeTemplate = {
+	ddState: $author$project$Dropdowns$Model$makeDropDownState(
 		_List_fromArray(
 			[
-				A2($elm$json$Json$Decode$map, $author$project$Helpers$JsonValue$JsonString, $elm$json$Json$Decode$string),
-				A2($elm$json$Json$Decode$map, $author$project$Helpers$JsonValue$JsonInt, $elm$json$Json$Decode$int),
-				A2($elm$json$Json$Decode$map, $author$project$Helpers$JsonValue$JsonFloat, $elm$json$Json$Decode$float),
-				A2($elm$json$Json$Decode$map, $author$project$Helpers$JsonValue$JsonBoolean, $elm$json$Json$Decode$bool),
-				A2(
-				$elm$json$Json$Decode$map,
-				$author$project$Helpers$JsonValue$JsonArray,
-				$elm$json$Json$Decode$list(
-					$elm$json$Json$Decode$lazy(
-						function (_v0) {
-							return $author$project$Helpers$JsonValue$cyclic$decoder();
-						}))),
-				A2(
-				$elm$json$Json$Decode$map,
-				$author$project$Helpers$JsonValue$JsonObject,
-				$elm$json$Json$Decode$dict(
-					$elm$json$Json$Decode$lazy(
-						function (_v1) {
-							return $author$project$Helpers$JsonValue$cyclic$decoder();
-						}))),
-				$elm$json$Json$Decode$null($author$project$Helpers$JsonValue$JsonNull)
-			]));
-}
-try {
-	var $author$project$Helpers$JsonValue$decoder = $author$project$Helpers$JsonValue$cyclic$decoder();
-	$author$project$Helpers$JsonValue$cyclic$decoder = function () {
-		return $author$project$Helpers$JsonValue$decoder;
-	};
-} catch ($) {
-	throw 'Some top-level definitions from `Helpers.JsonValue` are causing infinite recursion:\n\n  ┌─────┐\n  │    decoder\n  └─────┘\n\nThese errors are very tricky, so read https://elm-lang.org/0.19.1/bad-recursion to learn how to fix it!';}
-var $elm$json$Json$Decode$map4 = _Json_map4;
-var $author$project$Layout$srcDecoder = A5(
-	$elm$json$Json$Decode$map4,
-	$author$project$Layout$Src,
-	A2($elm$json$Json$Decode$field, 'name', $elm$json$Json$Decode$string),
-	A2($elm$json$Json$Decode$field, 'path', $elm$json$Json$Decode$string),
-	A2($elm$json$Json$Decode$field, 'sample', $author$project$Helpers$JsonValue$decoder),
-	A2($elm$json$Json$Decode$field, 'description', $elm$json$Json$Decode$string));
-var $author$project$Layout$srcListDecoder = $elm$json$Json$Decode$list($author$project$Layout$srcDecoder);
-var $author$project$Layout$listSources = $elm$http$Http$get(
-	{
-		expect: A2($elm$http$Http$expectJson, $author$project$Layout$Sources, $author$project$Layout$srcListDecoder),
-		url: '/templ/sources'
-	});
-var $author$project$Layout$init = function (_v0) {
-	return _Utils_Tuple2(
-		{
-			page: 'Home',
-			sources: _List_Nil,
-			srcDropDown: $elm$core$Dict$fromList(
-				_List_fromArray(
-					[
-						_Utils_Tuple2('info', '')
-					])),
-			srcSelected: $elm$core$Maybe$Nothing
-		},
-		$author$project$Layout$listSources);
+				_Utils_Tuple2('info', '')
+			])),
+	root: $author$project$Template$Model$Literal(
+		$author$project$Helpers$JsonValue$JsonObject($elm$core$Dict$empty)),
+	selectedPath: _List_Nil,
+	selectedSrc: $elm$core$Maybe$Nothing,
+	sources: _List_Nil
 };
-var $author$project$Layout$grid = F2(
+var $author$project$Model$init = function (_v0) {
+	return _Utils_Tuple2(
+		{page: 'Home', tem: $author$project$Template$Model$makeTemplate},
+		$elm$core$Platform$Cmd$none);
+};
+var $elm$core$Platform$Sub$batch = _Platform_batch;
+var $elm$core$Platform$Sub$none = $elm$core$Platform$Sub$batch(_List_Nil);
+var $elm$core$List$filter = F2(
+	function (isGood, list) {
+		return A3(
+			$elm$core$List$foldr,
+			F2(
+				function (x, xs) {
+					return isGood(x) ? A2($elm$core$List$cons, x, xs) : xs;
+				}),
+			_List_Nil,
+			list);
+	});
+var $elm$core$List$head = function (list) {
+	if (list.b) {
+		var x = list.a;
+		var xs = list.b;
+		return $elm$core$Maybe$Just(x);
+	} else {
+		return $elm$core$Maybe$Nothing;
+	}
+};
+var $author$project$Template$Update$findSource = F2(
+	function (srcs, name) {
+		return $elm$core$List$head(
+			A2(
+				$elm$core$List$filter,
+				function (s) {
+					return _Utils_eq(s.path, name);
+				},
+				srcs));
+	});
+var $elm$core$Dict$member = F2(
+	function (key, dict) {
+		var _v0 = A2($elm$core$Dict$get, key, dict);
+		if (_v0.$ === 'Just') {
+			return true;
+		} else {
+			return false;
+		}
+	});
+var $author$project$Dropdowns$Update$update = F3(
+	function (state, key, val) {
+		return A2($elm$core$Dict$member, key, state) ? A3(
+			$elm$core$Dict$insert,
+			key,
+			A2($elm$core$Maybe$withDefault, '', val),
+			state) : state;
+	});
+var $author$project$Template$Update$update = F2(
+	function (msg, tem) {
+		switch (msg.$) {
+			case 'SourceSelected':
+				var src = msg.a;
+				if (src.$ === 'Nothing') {
+					return tem;
+				} else {
+					var name = src.a;
+					return _Utils_update(
+						tem,
+						{
+							selectedSrc: A2($author$project$Template$Update$findSource, tem.sources, name)
+						});
+				}
+			case 'Sources':
+				var result = msg.a;
+				if (result.$ === 'Ok') {
+					var srcs = result.a;
+					return _Utils_update(
+						tem,
+						{sources: srcs});
+				} else {
+					return _Utils_update(
+						tem,
+						{sources: _List_Nil});
+				}
+			default:
+				var key = msg.a;
+				var selection = msg.b;
+				return _Utils_update(
+					tem,
+					{
+						ddState: A3($author$project$Dropdowns$Update$update, tem.ddState, key, selection)
+					});
+		}
+	});
+var $author$project$Update$update = F2(
+	function (msg, model) {
+		if (msg.$ === 'LayoutMsg') {
+			var p = msg.a;
+			return _Utils_Tuple2(
+				_Utils_update(
+					model,
+					{page: p}),
+				$elm$core$Platform$Cmd$none);
+		} else {
+			var m = msg.a;
+			return _Utils_Tuple2(
+				_Utils_update(
+					model,
+					{
+						tem: A2($author$project$Template$Update$update, m, model.tem)
+					}),
+				$elm$core$Platform$Cmd$none);
+		}
+	});
+var $author$project$View$grid = F2(
 	function (cls, children) {
 		return A2(
 			$elm$html$Html$div,
@@ -11068,69 +10780,243 @@ var $author$project$Layout$grid = F2(
 			children);
 	});
 var $elm$html$Html$h1 = _VirtualDom_node('h1');
-var $author$project$Layout$header = function (_v0) {
+var $author$project$View$header = A2(
+	$author$project$View$grid,
+	'columns',
+	_List_fromArray(
+		[
+			A2(
+			$author$project$View$grid,
+			'column',
+			_List_fromArray(
+				[
+					A2(
+					$elm$html$Html$h1,
+					_List_fromArray(
+						[
+							$elm$html$Html$Attributes$class('title')
+						]),
+					_List_fromArray(
+						[
+							$elm$html$Html$text('Twitch Discord Connector')
+						]))
+				]))
+		]));
+var $author$project$Template$View$grid = F2(
+	function (cls, children) {
+		return A2(
+			$elm$html$Html$div,
+			_List_fromArray(
+				[
+					$elm$html$Html$Attributes$class(cls)
+				]),
+			children);
+	});
+var $author$project$Template$View$templateControls = function (_v0) {
 	return A2(
 		$elm$html$Html$div,
 		_List_fromArray(
 			[
-				$elm$html$Html$Attributes$class('header')
-			]),
-		_List_fromArray(
-			[
-				A2(
-				$elm$html$Html$h1,
-				_List_Nil,
-				_List_fromArray(
-					[
-						$elm$html$Html$text('Twitch Discord Connector')
-					]))
-			]));
-};
-var $author$project$MainUI$account = _List_fromArray(
-	[
-		A2(
-		$elm$html$Html$h1,
-		_List_Nil,
-		_List_fromArray(
-			[
-				$elm$html$Html$text('Setup Account')
-			])),
-		A2(
-		$elm$html$Html$p,
-		_List_Nil,
-		_List_fromArray(
-			[
-				$elm$html$Html$text('Test Area')
-			]))
-	]);
-var $author$project$Layout$templateControls = function (_v0) {
-	return A2(
-		$elm$html$Html$div,
-		_List_fromArray(
-			[
-				$elm$html$Html$Attributes$class('template-controls wireframe')
+				$elm$html$Html$Attributes$class('template-controls')
 			]),
 		_List_fromArray(
 			[
 				$elm$html$Html$text('template controls')
 			]));
 };
-var $author$project$Layout$templateJson = function (_v0) {
+var $elm$core$List$maximum = function (list) {
+	if (list.b) {
+		var x = list.a;
+		var xs = list.b;
+		return $elm$core$Maybe$Just(
+			A3($elm$core$List$foldl, $elm$core$Basics$max, x, xs));
+	} else {
+		return $elm$core$Maybe$Nothing;
+	}
+};
+var $author$project$Helpers$JsonValue$objectDepth = function (j) {
+	if (j.$ === 'JsonObject') {
+		var d = j.a;
+		return 1 + A2(
+			$elm$core$Maybe$withDefault,
+			0,
+			$elm$core$List$maximum(
+				A2(
+					$elm$core$List$map,
+					function (v) {
+						return $author$project$Helpers$JsonValue$objectDepth(v);
+					},
+					$elm$core$Dict$values(d))));
+	} else {
+		return 0;
+	}
+};
+var $author$project$Template$View$jsonDepth = function (a) {
+	if (a.$ === 'Call') {
+		return 0;
+	} else {
+		var j = a.a;
+		return $author$project$Helpers$JsonValue$objectDepth(j);
+	}
+};
+var $elm$regex$Regex$Match = F4(
+	function (match, index, number, submatches) {
+		return {index: index, match: match, number: number, submatches: submatches};
+	});
+var $elm$regex$Regex$fromStringWith = _Regex_fromStringWith;
+var $elm$regex$Regex$fromString = function (string) {
+	return A2(
+		$elm$regex$Regex$fromStringWith,
+		{caseInsensitive: false, multiline: false},
+		string);
+};
+var $elm$regex$Regex$never = _Regex_never;
+var $jorgengranseth$elm_string_format$String$Format$regex = A2(
+	$elm$core$Basics$composeR,
+	$elm$regex$Regex$fromString,
+	$elm$core$Maybe$withDefault($elm$regex$Regex$never));
+var $elm$regex$Regex$replace = _Regex_replaceAtMost(_Regex_infinity);
+var $jorgengranseth$elm_string_format$String$Format$namedValue = F2(
+	function (name, val) {
+		var placeholder = $jorgengranseth$elm_string_format$String$Format$regex('{{\\s*' + (name + '\\s*}}'));
+		return A2(
+			$elm$regex$Regex$replace,
+			placeholder,
+			function (_v0) {
+				return val;
+			});
+	});
+var $author$project$Template$View$jsonCell = function (columns) {
+	return $author$project$Template$View$grid(
+		A3(
+			$jorgengranseth$elm_string_format$String$Format$namedValue,
+			'section',
+			$elm$core$String$fromInt(columns),
+			'column is-{{ section }} json-item'));
+};
+var $author$project$Template$View$jsonItem = F3(
+	function (tem, row, column) {
+		return _List_fromArray(
+			[
+				A2(
+				$elm$html$Html$p,
+				_List_Nil,
+				_List_fromArray(
+					[
+						$elm$html$Html$text(
+						A3(
+							$jorgengranseth$elm_string_format$String$Format$namedValue,
+							'col',
+							$elm$core$String$fromInt(column),
+							A3(
+								$jorgengranseth$elm_string_format$String$Format$namedValue,
+								'row',
+								$elm$core$String$fromInt(row),
+								'( {{ row }}, {{ col }} )')))
+					]))
+			]);
+	});
+var $elm$core$Debug$log = _Debug_log;
+var $author$project$Template$View$jsonLine = F4(
+	function (tem, dims, row, column) {
+		var ji = A3($author$project$Template$View$jsonItem, tem, row, column);
+		var col_count = dims.b;
+		var _v0 = A2(
+			$elm$core$Debug$log,
+			'line',
+			_Utils_Tuple3(dims, row, column));
+		if (_Utils_cmp(dims.a, row + 1) < 1) {
+			return A2(
+				$elm$core$List$cons,
+				A2($author$project$Template$View$jsonCell, col_count, ji),
+				A4($author$project$Template$View$jsonLine, tem, dims, row + 1, column));
+		} else {
+			var _v1 = A2($elm$core$Debug$log, 'row end', '');
+			return _List_fromArray(
+				[
+					A2($author$project$Template$View$jsonCell, col_count, ji)
+				]);
+		}
+	});
+var $author$project$Template$View$jsonFields = F3(
+	function (tem, dims, column) {
+		var col_count = dims.b;
+		var _v0 = A2(
+			$elm$core$Debug$log,
+			'fields',
+			_Utils_Tuple2(dims, column));
+		return _Utils_eq(col_count, column) ? _List_fromArray(
+			[
+				A2(
+				$author$project$Template$View$grid,
+				'columns',
+				A4($author$project$Template$View$jsonLine, tem, dims, 0, column))
+			]) : A2(
+			$elm$core$List$cons,
+			A2(
+				$author$project$Template$View$grid,
+				'columns',
+				A4($author$project$Template$View$jsonLine, tem, dims, 0, column)),
+			A3($author$project$Template$View$jsonFields, tem, dims, column + 1));
+	});
+var $elm$core$List$sum = function (numbers) {
+	return A3($elm$core$List$foldl, $elm$core$Basics$add, 0, numbers);
+};
+var $author$project$Helpers$JsonValue$keyCount = function (j) {
+	switch (j.$) {
+		case 'JsonArray':
+			var ja = j.a;
+			return 2 + $elm$core$List$sum(
+				A2(
+					$elm$core$List$map,
+					function (ele) {
+						return $author$project$Helpers$JsonValue$keyCount(ele);
+					},
+					ja));
+		case 'JsonObject':
+			var jo = j.a;
+			return 2 + $elm$core$List$sum(
+				A2(
+					$elm$core$List$map,
+					function (ele) {
+						return $author$project$Helpers$JsonValue$keyCount(ele);
+					},
+					$elm$core$Dict$values(jo)));
+		default:
+			return 1;
+	}
+};
+var $author$project$Template$View$keyCount = function (a) {
+	if (a.$ === 'Call') {
+		return 1;
+	} else {
+		var j = a.a;
+		return $author$project$Helpers$JsonValue$keyCount(j);
+	}
+};
+var $author$project$Template$View$templateJson = function (tem) {
+	var rows = $author$project$Template$View$keyCount(tem.root);
+	var cols = $author$project$Template$View$jsonDepth(tem.root);
 	return A2(
 		$elm$html$Html$div,
 		_List_fromArray(
 			[
-				$elm$html$Html$Attributes$class('template-json wireframe')
+				$elm$html$Html$Attributes$class('template-json column')
 			]),
-		_List_fromArray(
-			[
-				$elm$html$Html$text('template json')
-			]));
+		A3(
+			$author$project$Template$View$jsonFields,
+			tem,
+			_Utils_Tuple2(rows, cols),
+			0));
 };
-var $author$project$Layout$DropDownChange = F2(
+var $author$project$Template$Msg$DropDownMessage = F2(
 	function (a, b) {
-		return {$: 'DropDownChange', a: a, b: b};
+		return {$: 'DropDownMessage', a: a, b: b};
 	});
+var $author$project$Msg$TemplateMessage = function (a) {
+	return {$: 'TemplateMessage', a: a};
+};
+var $elm$html$Html$label = _VirtualDom_node('label');
 var $elm$json$Json$Encode$bool = _Json_wrap;
 var $elm$html$Html$Attributes$boolProperty = F2(
 	function (key, bool) {
@@ -11225,50 +11111,29 @@ var $abadi199$elm_input_extra$Dropdown$dropdown = F3(
 					])),
 			A2($elm$core$List$map, toOption, itemsWithEmptyItems));
 	});
-var $elm$html$Html$label = _VirtualDom_node('label');
-var $author$project$Layout$makeDropDown = F3(
-	function (model, key, txt) {
-		var names = A2(
+var $author$project$Dropdowns$View$myDropDown = F4(
+	function (ddstate, key, item_keys, msg_maker) {
+		var itms = A2(
 			$elm$core$List$map,
-			function (src) {
-				return {enabled: true, text: src.path, value: src.path};
+			function (s) {
+				return {enabled: true, text: s, value: s};
 			},
-			model.sources);
+			item_keys);
 		return A2(
 			$elm$html$Html$div,
-			_List_Nil,
 			_List_fromArray(
 				[
-					A2(
-					$elm$html$Html$label,
+					$elm$html$Html$Attributes$class('select')
+				]),
+			_List_fromArray(
+				[
+					A3(
+					$abadi199$elm_input_extra$Dropdown$dropdown,
+					{emptyItem: $elm$core$Maybe$Nothing, items: itms, onChange: msg_maker},
 					_List_Nil,
-					_List_fromArray(
-						[
-							$elm$html$Html$text(txt)
-						])),
-					A2(
-					$elm$html$Html$div,
-					_List_fromArray(
-						[
-							$elm$html$Html$Attributes$class('select')
-						]),
-					_List_fromArray(
-						[
-							A3(
-							$abadi199$elm_input_extra$Dropdown$dropdown,
-							{
-								emptyItem: $elm$core$Maybe$Nothing,
-								items: names,
-								onChange: $author$project$Layout$DropDownChange(key)
-							},
-							_List_Nil,
-							A2($elm$core$Dict$get, key, model.srcDropDown))
-						]))
+					A2($elm$core$Dict$get, key, ddstate))
 				]));
 	});
-var $author$project$Layout$row = function (children) {
-	return A2($author$project$Layout$grid, 'row', children);
-};
 var $elm$json$Json$Encode$dict = F3(
 	function (toKey, toValue, dictionary) {
 		return _Json_wrap(
@@ -11313,20 +11178,16 @@ var $author$project$Helpers$JsonValue$encoder = function (jv) {
 	}
 };
 var $elm$html$Html$strong = _VirtualDom_node('strong');
-var $author$project$Layout$selectedSourceInfo = function (model) {
-	var _v0 = model.srcSelected;
-	if (_v0.$ === 'Nothing') {
-		return $author$project$Layout$row(_List_Nil);
-	} else {
-		var src = _v0.a;
+var $author$project$Template$View$infoLine = F2(
+	function (label, data) {
 		return A2(
-			$author$project$Layout$grid,
-			'pure-g',
+			$author$project$Template$View$grid,
+			'columns',
 			_List_fromArray(
 				[
 					A2(
-					$author$project$Layout$grid,
-					'pure-u-1-4 left',
+					$author$project$Template$View$grid,
+					'column',
 					_List_fromArray(
 						[
 							A2(
@@ -11334,25 +11195,12 @@ var $author$project$Layout$selectedSourceInfo = function (model) {
 							_List_Nil,
 							_List_fromArray(
 								[
-									$elm$html$Html$text('Name')
+									$elm$html$Html$text(label)
 								]))
 						])),
 					A2(
-					$author$project$Layout$grid,
-					'pure-u-3-4 right',
-					_List_fromArray(
-						[
-							A2(
-							$elm$html$Html$p,
-							_List_Nil,
-							_List_fromArray(
-								[
-									$elm$html$Html$text(src.path)
-								]))
-						])),
-					A2(
-					$author$project$Layout$grid,
-					'pure-u-1-4 left',
+					$author$project$Template$View$grid,
+					'column',
 					_List_fromArray(
 						[
 							A2(
@@ -11360,94 +11208,111 @@ var $author$project$Layout$selectedSourceInfo = function (model) {
 							_List_Nil,
 							_List_fromArray(
 								[
-									$elm$html$Html$text('Description')
-								]))
-						])),
-					A2(
-					$author$project$Layout$grid,
-					'pure-u-3-4 right',
-					_List_fromArray(
-						[
-							A2(
-							$elm$html$Html$p,
-							_List_Nil,
-							_List_fromArray(
-								[
-									$elm$html$Html$text(src.description)
-								]))
-						])),
-					A2(
-					$author$project$Layout$grid,
-					'pure-u-1-4 left',
-					_List_fromArray(
-						[
-							A2(
-							$elm$html$Html$strong,
-							_List_Nil,
-							_List_fromArray(
-								[
-									$elm$html$Html$text('Sample')
-								]))
-						])),
-					A2(
-					$author$project$Layout$grid,
-					'pure-u-3-4 right',
-					_List_fromArray(
-						[
-							A2(
-							$elm$html$Html$p,
-							_List_Nil,
-							_List_fromArray(
-								[
-									$elm$html$Html$text(
-									A2(
-										$elm$json$Json$Encode$encode,
-										2,
-										$author$project$Helpers$JsonValue$encoder(src.sample)))
+									$elm$html$Html$text(data)
 								]))
 						]))
 				]));
+	});
+var $author$project$Template$View$selectedSourceInfo = function (tem) {
+	var _v0 = tem.selectedSrc;
+	if (_v0.$ === 'Nothing') {
+		return A2($author$project$Template$View$grid, '', _List_Nil);
+	} else {
+		var src = _v0.a;
+		return A2(
+			$author$project$Template$View$grid,
+			'',
+			_List_fromArray(
+				[
+					A2($author$project$Template$View$infoLine, 'Name', src.path),
+					A2($author$project$Template$View$infoLine, 'Description', src.description),
+					A2(
+					$author$project$Template$View$infoLine,
+					'Sample',
+					A2(
+						$elm$json$Json$Encode$encode,
+						2,
+						$author$project$Helpers$JsonValue$encoder(src.sample)))
+				]));
 	}
 };
-var $author$project$Layout$templateSrcs = function (model) {
+var $author$project$Template$View$templateSrcs = function (tem) {
+	var items = A2(
+		$elm$core$List$map,
+		function (s) {
+			return s.path;
+		},
+		tem.sources);
 	return A2(
-		$author$project$Layout$grid,
-		'template-srcs wireframe',
+		$author$project$Template$View$grid,
+		'template-srcs',
 		_List_fromArray(
 			[
-				$author$project$Layout$row(
+				A2(
+				$author$project$Template$View$grid,
+				'columns',
 				_List_fromArray(
 					[
-						A3($author$project$Layout$makeDropDown, model, 'info', 'Available Functions')
+						A2(
+						$elm$html$Html$div,
+						_List_fromArray(
+							[
+								$elm$html$Html$Attributes$class('column')
+							]),
+						_List_fromArray(
+							[
+								A2(
+								$elm$html$Html$label,
+								_List_Nil,
+								_List_fromArray(
+									[
+										$elm$html$Html$text('Available Functions')
+									])),
+								A4(
+								$author$project$Dropdowns$View$myDropDown,
+								tem.ddState,
+								'info',
+								items,
+								A2(
+									$elm$core$Basics$composeL,
+									$author$project$Msg$TemplateMessage,
+									$author$project$Template$Msg$DropDownMessage('info')))
+							]))
 					])),
-				$author$project$Layout$selectedSourceInfo(model)
+				$author$project$Template$View$selectedSourceInfo(tem)
 			]));
 };
-var $author$project$Layout$templateEditor = function (model) {
-	return _List_fromArray(
-		[
-			$author$project$Layout$templateJson(model),
-			$author$project$Layout$templateSrcs(model),
-			$author$project$Layout$templateControls(model)
-		]);
+var $author$project$Template$View$templateEditor = function (tem) {
+	return A2(
+		$author$project$Template$View$grid,
+		'columns',
+		_List_fromArray(
+			[
+				$author$project$Template$View$templateJson(tem),
+				A2(
+				$author$project$Template$View$grid,
+				'column is-4',
+				_List_fromArray(
+					[
+						$author$project$Template$View$templateSrcs(tem),
+						$author$project$Template$View$templateControls(tem)
+					]))
+			]));
 };
-var $author$project$Layout$mainPage = function (model) {
+var $author$project$View$mainPage = function (model) {
 	var _v0 = model.page;
-	switch (_v0) {
-		case 'Account':
-			return $author$project$MainUI$account;
-		case 'Home':
-			return $author$project$Layout$templateEditor(model);
-		default:
-			return $author$project$Layout$templateEditor(model);
+	if (_v0 === 'Home') {
+		return $author$project$Template$View$templateEditor(model.tem);
+	} else {
+		return $author$project$Template$View$templateEditor(model.tem);
 	}
 };
-var $author$project$Layout$Navigate = function (a) {
-	return {$: 'Navigate', a: a};
+var $author$project$Msg$LayoutMsg = function (a) {
+	return {$: 'LayoutMsg', a: a};
 };
-var $author$project$Layout$navButton = F2(
-	function (model, name) {
-		var dis = _Utils_eq(name, model.page);
+var $author$project$View$navButton = F2(
+	function (page, name) {
+		var dis = _Utils_eq(name, page);
 		return A2(
 			$elm$html$Html$div,
 			_List_Nil,
@@ -11458,8 +11323,8 @@ var $author$project$Layout$navButton = F2(
 					_List_fromArray(
 						[
 							$elm$html$Html$Events$onClick(
-							$author$project$Layout$Navigate(name)),
-							$elm$html$Html$Attributes$class('pure-button'),
+							$author$project$Msg$LayoutMsg(page)),
+							$elm$html$Html$Attributes$class('button'),
 							$elm$html$Html$Attributes$disabled(dis)
 						]),
 					_List_fromArray(
@@ -11468,120 +11333,49 @@ var $author$project$Layout$navButton = F2(
 						]))
 				]));
 	});
-var $author$project$Layout$sidebar = function (page) {
+var $author$project$View$sidebar = function (page) {
 	return A2(
 		$elm$html$Html$div,
 		_List_fromArray(
 			[
-				$elm$html$Html$Attributes$class('sidebar')
+				$elm$html$Html$Attributes$class('sidebar column is-1')
 			]),
 		A2(
 			$elm$core$List$map,
 			function (name) {
-				return A2($author$project$Layout$navButton, page, name);
+				return A2($author$project$View$navButton, page, name);
 			},
 			_List_fromArray(
 				['Home', 'Account'])));
 };
-var $author$project$Layout$layout = function (model) {
+var $author$project$View$layout = function (model) {
 	return A2(
-		$author$project$Layout$grid,
-		'container',
-		A2(
-			$elm$core$List$append,
-			_List_fromArray(
-				[
-					$author$project$Layout$sidebar(model),
-					$author$project$Layout$header(model)
-				]),
-			$author$project$Layout$mainPage(model)));
+		$author$project$View$grid,
+		'columns',
+		_List_fromArray(
+			[
+				$author$project$View$sidebar(model.page),
+				A2(
+				$author$project$View$grid,
+				'column',
+				_List_fromArray(
+					[
+						$author$project$View$header,
+						$author$project$View$mainPage(model)
+					]))
+			]));
 };
-var $elm$core$Platform$Sub$batch = _Platform_batch;
-var $elm$core$Platform$Sub$none = $elm$core$Platform$Sub$batch(_List_Nil);
-var $author$project$Layout$subscriptions = function (_v0) {
-	return $elm$core$Platform$Sub$none;
+var $author$project$Main$view = function (model) {
+	return $author$project$View$layout(model);
 };
-var $elm$core$List$filter = F2(
-	function (isGood, list) {
-		return A3(
-			$elm$core$List$foldr,
-			F2(
-				function (x, xs) {
-					return isGood(x) ? A2($elm$core$List$cons, x, xs) : xs;
-				}),
-			_List_Nil,
-			list);
-	});
-var $elm$core$List$head = function (list) {
-	if (list.b) {
-		var x = list.a;
-		var xs = list.b;
-		return $elm$core$Maybe$Just(x);
-	} else {
-		return $elm$core$Maybe$Nothing;
-	}
-};
-var $author$project$Layout$update = F2(
-	function (msg, model) {
-		switch (msg.$) {
-			case 'Navigate':
-				var newPage = msg.a;
-				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{page: newPage}),
-					$elm$core$Platform$Cmd$none);
-			case 'Sources':
-				var result = msg.a;
-				if (result.$ === 'Ok') {
-					var srcs = result.a;
-					return _Utils_Tuple2(
-						_Utils_update(
-							model,
-							{sources: srcs}),
-						$elm$core$Platform$Cmd$none);
-				} else {
-					return _Utils_Tuple2(
-						_Utils_update(
-							model,
-							{sources: _List_Nil}),
-						$elm$core$Platform$Cmd$none);
-				}
-			case 'DropDownChange':
-				var key = msg.a;
-				var state = msg.b;
-				if (state.$ === 'Nothing') {
-					return _Utils_Tuple2(model, $elm$core$Platform$Cmd$none);
-				} else {
-					var path = state.a;
-					var src = $elm$core$List$head(
-						A2(
-							$elm$core$List$filter,
-							function (s) {
-								return _Utils_eq(s.path, path);
-							},
-							model.sources));
-					var m = _Utils_update(
-						model,
-						{
-							srcDropDown: A3($elm$core$Dict$insert, key, path, model.srcDropDown)
-						});
-					return _Utils_Tuple2(
-						_Utils_update(
-							m,
-							{srcSelected: src}),
-						$elm$core$Platform$Cmd$none);
-				}
-			default:
-				var src = msg.a;
-				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{srcSelected: src}),
-					$elm$core$Platform$Cmd$none);
-		}
-	});
 var $author$project$Main$main = $elm$browser$Browser$element(
-	{init: $author$project$Layout$init, subscriptions: $author$project$Layout$subscriptions, update: $author$project$Layout$update, view: $author$project$Layout$layout});
+	{
+		init: $author$project$Model$init,
+		subscriptions: function (_v0) {
+			return $elm$core$Platform$Sub$none;
+		},
+		update: $author$project$Update$update,
+		view: $author$project$Main$view
+	});
 _Platform_export({'Main':{'init':$author$project$Main$main(
-	$elm$json$Json$Decode$succeed(_Utils_Tuple0))({"versions":{"elm":"0.19.1"},"types":{"message":"Layout.Msg","aliases":{"Layout.Src":{"args":[],"type":"{ name : String.String, path : String.String, sample : Helpers.JsonValue.JsonValue, description : String.String }"}},"unions":{"Layout.Msg":{"args":[],"tags":{"Navigate":["String.String"],"Sources":["Result.Result Http.Error (List.List Layout.Src)"],"SourceSelected":["Maybe.Maybe Layout.Src"],"DropDownChange":["String.String","Maybe.Maybe String.String"]}},"Http.Error":{"args":[],"tags":{"BadUrl":["String.String"],"Timeout":[],"NetworkError":[],"BadStatus":["Basics.Int"],"BadBody":["String.String"]}},"Helpers.JsonValue.JsonValue":{"args":[],"tags":{"JsonString":["String.String"],"JsonInt":["Basics.Int"],"JsonFloat":["Basics.Float"],"JsonBoolean":["Basics.Bool"],"JsonArray":["List.List Helpers.JsonValue.JsonValue"],"JsonObject":["Dict.Dict String.String Helpers.JsonValue.JsonValue"],"JsonNull":[]}},"List.List":{"args":["a"],"tags":{}},"Maybe.Maybe":{"args":["a"],"tags":{"Just":["a"],"Nothing":[]}},"Result.Result":{"args":["error","value"],"tags":{"Ok":["value"],"Err":["error"]}},"String.String":{"args":[],"tags":{"String":[]}},"Basics.Bool":{"args":[],"tags":{"True":[],"False":[]}},"Dict.Dict":{"args":["k","v"],"tags":{"RBNode_elm_builtin":["Dict.NColor","k","v","Dict.Dict k v","Dict.Dict k v"],"RBEmpty_elm_builtin":[]}},"Basics.Float":{"args":[],"tags":{"Float":[]}},"Basics.Int":{"args":[],"tags":{"Int":[]}},"Dict.NColor":{"args":[],"tags":{"Red":[],"Black":[]}}}}})}});}(this));
+	$elm$json$Json$Decode$succeed(_Utils_Tuple0))({"versions":{"elm":"0.19.1"},"types":{"message":"Msg.Msg","aliases":{"Msg.Page":{"args":[],"type":"String.String"},"Template.Src.Src":{"args":[],"type":"{ name : String.String, path : String.String, sample : Helpers.JsonValue.JsonValue, description : String.String }"}},"unions":{"Msg.Msg":{"args":[],"tags":{"LayoutMsg":["Msg.Page"],"TemplateMessage":["Template.Msg.Msg"]}},"Template.Msg.Msg":{"args":[],"tags":{"SourceSelected":["Maybe.Maybe String.String"],"Sources":["Result.Result Http.Error (List.List Template.Src.Src)"],"DropDownMessage":["String.String","Maybe.Maybe String.String"]}},"String.String":{"args":[],"tags":{"String":[]}},"Http.Error":{"args":[],"tags":{"BadUrl":["String.String"],"Timeout":[],"NetworkError":[],"BadStatus":["Basics.Int"],"BadBody":["String.String"]}},"Helpers.JsonValue.JsonValue":{"args":[],"tags":{"JsonString":["String.String"],"JsonInt":["Basics.Int"],"JsonFloat":["Basics.Float"],"JsonBoolean":["Basics.Bool"],"JsonArray":["List.List Helpers.JsonValue.JsonValue"],"JsonObject":["Dict.Dict String.String Helpers.JsonValue.JsonValue"],"JsonNull":[]}},"List.List":{"args":["a"],"tags":{}},"Maybe.Maybe":{"args":["a"],"tags":{"Just":["a"],"Nothing":[]}},"Result.Result":{"args":["error","value"],"tags":{"Ok":["value"],"Err":["error"]}},"Basics.Bool":{"args":[],"tags":{"True":[],"False":[]}},"Dict.Dict":{"args":["k","v"],"tags":{"RBNode_elm_builtin":["Dict.NColor","k","v","Dict.Dict k v","Dict.Dict k v"],"RBEmpty_elm_builtin":[]}},"Basics.Float":{"args":[],"tags":{"Float":[]}},"Basics.Int":{"args":[],"tags":{"Int":[]}},"Dict.NColor":{"args":[],"tags":{"Red":[],"Black":[]}}}}})}});}(this));

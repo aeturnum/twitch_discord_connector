@@ -15,6 +15,7 @@ defmodule TwitchDiscordConnector.Twitch.Subs do
     #   hub.topic='https://api.twitch.tv/helix/streams?user_id=35634557'
     #   hub.lease_seconds=1
 
+
     secret = TwitchDiscordConnector.Util.H.random_string(12)
 
     Common.post(%{
@@ -50,7 +51,7 @@ defmodule TwitchDiscordConnector.Twitch.Subs do
   def sig_valid?(sub_id, headers, body) do
     case TwitchUserDB.load_sub(sub_id) do
       %{"secret" => secret} ->
-        with raw_bytes <- :crypto.hmac(:sha256, secret, body |> Poison.encode!()),
+        with raw_bytes <- :crypto.mac(:hmac, :sha256, secret, body |> Poison.encode!()),
              pretty_bytes <- Base.encode16(raw_bytes) |> String.downcase(),
              formatted_str <- "sha256=#{pretty_bytes}",
              from_twitch <- str_list_get(headers, "x-hub-signature") do

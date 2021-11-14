@@ -4,6 +4,12 @@ defmodule TwitchDiscordConnector.Util.H do
   """
 
   # alias TwitchDiscordConnector.Util.L
+  def unwrap?(val, atm) do
+    case val do
+      {^atm, wrapped_val} -> wrapped_val
+      _ -> val
+    end
+  end
 
   # https://stackoverflow.com/questions/32001606/how-to-generate-a-random-url-safe-string-with-elixir
   def random_string(length) do

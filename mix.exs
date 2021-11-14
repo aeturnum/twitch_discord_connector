@@ -21,8 +21,8 @@ defmodule TwitchDiscordConnector.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      # extra_applications: [:logger, :plug, :cowboy],
-      extra_applications: [:logger],
+      extra_applications: [:logger, :plug, :cowboy],
+      # extra_applications: [:logger],
       mod: {TwitchDiscordConnector, []}
     ]
   end
@@ -33,9 +33,9 @@ defmodule TwitchDiscordConnector.MixProject do
       # Oauth library
       # {:oauth2, "~> 2.0"},
       # JSON library
-      {:poison, "~> 4.0"},
+      {:poison, "~> 4.0", override: true},
       # HTTP request library that uses :poison
-      {:httpoison, "~> 1.7.0"},
+      {:httpoison, "~> 1.8"},
       # webserver
       {:plug_cowboy, "~> 2.4.0"},
       # CORS support
@@ -45,6 +45,9 @@ defmodule TwitchDiscordConnector.MixProject do
       {:ex_aws_s3, "~> 2.0"},
       {:hackney, "~> 1.15"},
       {:sweet_xml, "~> 0.6"},
+      # Twitch Bot
+      # {:blur, path: "/Users/ddrexler/src/elixir/blur"},
+      {:blur, git: "https://github.com/aeturnum/blur.git", branch: "0.3.0-beta1"},
       # test area
       {:excoveralls, "~> 0.13", only: :test}
     ]

@@ -22,44 +22,43 @@ defmodule TwitchDiscordConnector.Event.Loader do
         [],
         fn uid, actions ->
           actions
-          |> add_twitch_handler(uid)
-          |> add_discord_handler(uid)
+          |> add_job(twitch_handler_job(uid))
+          # |> add_discord_handler(uid)
         end
       ),
       s
     }
   end
 
+  # add discord handler when the twitch_handler broadcasts the data
+  def handle_event({:brod, :twitch_user}, {:twitch_user_info, info}, s), do: {discord_handler_job(info), s}
+
   # default
   def handle_event(_), do: :ignore
 
-  defp add_twitch_handler(actions, uid) do
-    [
+  defp add_job(actions, handler), do: [ handler | actions ]
+
+  defp twitch_handler_job(uid) do
+    {
+      :job,
+      :me,
+      :load_twitch,
       {
-        :job,
-        :me,
-        :load_twitch,
-        {
-          &Event.add_listener/2,
-          [TwitchDiscordConnector.Event.TwitchUser, uid]
-        }
+        &Event.add_listener/2,
+        [TwitchDiscordConnector.Event.TwitchUser, uid]
       }
-      | actions
-    ]
+    }
   end
 
-  defp add_discord_handler(actions, uid) do
-    [
+  defp discord_handler_job(user_info) do
+    {
+      :job,
+      :me,
+      :load_disc,
       {
-        :job,
-        :me,
-        :load_disc,
-        {
-          &Event.add_listener/2,
-          [TwitchDiscordConnector.Event.DiscEvents, uid]
-        }
+        &Event.add_listener/2,
+        [TwitchDiscordConnector.Event.DiscEvents, {user_info.uid, user_info}]
       }
-      | actions
-    ]
+    }
   end
 end

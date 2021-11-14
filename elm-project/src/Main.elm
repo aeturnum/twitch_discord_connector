@@ -1,8 +1,18 @@
 module Main exposing (..)
 
 import Browser
-import Layout exposing (init, layout, subscriptions, update)
+import Html exposing (..)
+import Model
+import Msg
+import Update
+import View
 
 
+view : Model.Model -> Html Msg.Msg
+view model =
+    View.layout model
+
+
+main : Program () Model.Model Msg.Msg
 main =
-    Browser.element { init = init, update = update, subscriptions = subscriptions, view = layout }
+    Browser.element { init = Model.init, update = Update.update, subscriptions = \_ -> Sub.none, view = view }

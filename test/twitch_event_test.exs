@@ -12,7 +12,8 @@ defmodule TwitchDiscordConnectorTest.Event.Twitch do
 
     {actions, state} = TwitchUser.handle_event({:send, :event}, {:added, nil}, user)
 
-    assert action_exists(actions, {:job, :me, :subscribe, {:ok, ["0", 28800]}}) == true
+    # we don't sub in tests anymore
+    # assert action_exists(actions, {:job, :me, :subscribe, {:ok, ["0", 28800]}}) == true
     assert action_exists(actions, {:job, :me, :user_info, {:ok, ["0"]}}) == true
   end
 

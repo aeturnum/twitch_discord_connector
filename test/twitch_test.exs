@@ -7,17 +7,15 @@ defmodule TwitchDiscordConnectorTest.Twitch do
   end
 
   test "name gen" do
-    TwitchDiscordConnector.Discord.image_name("test") |> IO.inspect()
+    name = TwitchDiscordConnector.Discord.image_name("test")
+    assert String.contains?(name, "test")
+    assert String.contains?(name, ".jpg")
   end
 
   test "user info" do
     {:ok, user} = TwitchDiscordConnector.Twitch.User.info_id(503_254)
 
     assert user["id"] == "503254"
-  end
-
-  test "fake webhook" do
-    TwitchDiscordConnector.Discord.fake_hook("503254") |> IO.inspect()
   end
 
   test "signature" do
@@ -54,6 +52,6 @@ defmodule TwitchDiscordConnectorTest.Twitch do
   end
 
   test "poison?" do
-    %{"test" => true} |> Poison.encode!() |> IO.inspect()
+    assert "{\"test\":true}" ==  %{"test" => true} |> Poison.encode!()
   end
 end

@@ -49,55 +49,43 @@ defmodule TwitchDiscordConnector.Template do
     end
   end
 
-  defp collect_result({task, result}, results) do
-    # L.d("Checking task: #{inspect(result)}")
-
-    case result do
-      nil ->
+  @spec collect_result({Task.t(), map()}, map()) :: map()
+  defp collect_result({task, nil}, results) do
         L.e("Task timed out!")
         Task.shutdown(task, :brutal_kill)
         results
-
-      {:exit, reason} ->
-        L.e("Task failed: #{inspect(reason)}")
-        results
-
-      {:ok, {name, {code, value}}} ->
-        case code do
-          :ok ->
-            value =
-              case value do
-                # atomception
-                {:ok, real_value} -> real_value
-                _ -> value
-              end
-
-            Map.put(results, name, value)
-
-          :error ->
-            L.e("Task #{name} succeded but had internal error: #{inspect(value)}")
-            results
-        end
-    end
   end
 
-  defp do_calls(call_map, prev_results \\ %{}, level \\ 0) do
-    case Map.has_key?(call_map, level) do
-      true ->
-        do_calls(
-          call_map,
-          call_map[level]
-          # |> L.ins("map[#{level}]")
-          |> Enum.map(fn {src_call, _} -> SrcCall.task(src_call, prev_results) end)
-          # thank you https://stackoverflow.com/questions/42330425/how-to-await-multiple-tasks-in-elixir
-          |> Task.yield_many(@task_timeout)
-          |> Enum.reduce(prev_results, &collect_result/2),
-          # |> L.ins("map[#{level}] results"),
-          level + 1
-        )
+  defp collect_result({task, {:exit, reason}}, results) do
+        L.e("Task failed: #{inspect(reason)}")
+        results
+  end
 
-      false ->
-        prev_results
+  defp collect_result({task, {:ok, {name, {:ok, value}}}}, results) do
+        Map.put(results, name, H.unwrap?(value, :ok))
+  end
+
+  defp collect_result({task, {:ok, {name, {:error, value}}}}, results) do
+        L.e("Task #{name} succeded but had internal error: #{inspect(value)}")
+        results
+  end
+
+  @spec do_calls(map(), map(), non_neg_integer()) :: map()
+  defp do_calls(call_map, prev_results \\ %{}, level \\ 0) do
+    if Map.has_key?(call_map, level) do
+      do_calls(
+        call_map,
+        call_map[level]
+        # |> L.ins("map[#{level}]")
+        |> Enum.map(fn {src_call, _} -> SrcCall.task(src_call, prev_results) end)
+        # thank you https://stackoverflow.com/questions/42330425/how-to-await-multiple-tasks-in-elixir
+        |> Task.yield_many(@task_timeout)
+        |> Enum.reduce(prev_results, &collect_result/2),
+        # |> L.ins("map[#{level}] results"),
+        level + 1
+      )
+    else
+      prev_results
     end
   end
 

@@ -52,13 +52,13 @@ defmodule TwitchDiscordConnector.Template.SrcCall do
     end
   end
 
-  def task(sc = %SrcCall{}, results) do
-    with args <- Enum.map(sc.args, fn arg -> replace_arg(arg, results) end) do
+  def task(sc = %SrcCall{}, prev_results) do
+    with args <- Enum.map(sc.args, fn arg -> replace_arg(arg, prev_results) end) do
       Task.async(fn -> {glyph(sc), Src.call(sc.src, args)} end)
     end
   end
 
-  def replace_arg(sc = %SrcCall{}, results), do: resolve_call(sc, results)
+  def replace_arg(sc = %SrcCall{}, prev_results), do: resolve_call(sc, prev_results)
   def replace_arg(o, _), do: o
 
   def depends_on(s = %SrcCall{}) do

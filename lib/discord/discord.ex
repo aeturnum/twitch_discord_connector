@@ -34,6 +34,18 @@ defmodule TwitchDiscordConnector.Discord do
     end
   end
 
+  def template_hook(username, hook) do
+    with message <- Template.resolve(stream_template(username)) do
+      L.i("Sending payload to discord: #{Poison.encode!(message)}")
+      Common.post(%{
+        url: hook,
+        body: message,
+        # print the args and the response
+        print: true
+      })
+    end
+  end
+
   @doc """
   Send the pre-set JSON structure to the .
 
@@ -46,7 +58,13 @@ defmodule TwitchDiscordConnector.Discord do
 
     case get_info(user_id) do
       {:ok, {user, stream, game}} ->
-        L.d("Testing template lib: #{stream_template(user["login"]) |> Template.resolve()}")
+        try do
+          L.d("Testing template lib...")
+          template = stream_template(user["login"]) |> Template.resolve()
+          L.d("Testing template lib: #{inspect(template)}")
+        catch
+          _ -> L.d("Testing template lib...FAILED")
+        end
 
         with {:ok, thumb_url} <- get_stream_thumb(user, stream),
              message <- stream_message(thumb_url, user, stream, game) do

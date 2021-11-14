@@ -4,8 +4,10 @@ defmodule TwitchDiscordConnector.Startup do
   alias TwitchDiscordConnector.Util.L
   alias TwitchDiscordConnector.Template.SrcServer
 
+  def build(), do: Application.get_env(:twitch_discord_connector, :environment)
+
   def startup_tasks() do
-    L.i("Begining startup tasks")
+    L.i("Begining startup tasks for #{inspect(build())}")
 
     load_sources()
 
@@ -123,7 +125,7 @@ defmodule TwitchDiscordConnector.Startup do
 
       Expects to be passed the results of 'twitch.user' and 'twitch.stream'.",
       "https://img.naturecultur.es/th3six4ninja_2_19_2021_Z4-Za.jpg",
-      &TwitchDiscordConnector.Discord.format_time_from_str/1
+      &TwitchDiscordConnector.Discord.get_stream_thumb/2
     )
   end
 end
