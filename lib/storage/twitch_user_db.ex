@@ -5,7 +5,7 @@ defmodule TwitchDiscordConnector.JsonDB.TwitchUserDB do
   Future use will probably cut down the amount of information stored.
   """
   # Common method for saving and getting twitch data
-  defstruct uid: "", info: nil, hook: nil, sub: nil, state: %{}
+  defstruct uid: "", info: nil, hook: nil, online_sub: nil, offline_sub: nil, state: %{}
 
   alias TwitchDiscordConnector.JsonDB.TwitchUserDB
   alias TwitchDiscordConnector.JsonDB
@@ -30,7 +30,8 @@ defmodule TwitchDiscordConnector.JsonDB.TwitchUserDB do
       %{
         "info" => user.info,
         "hook" => user.hook,
-        "sub" => user.sub,
+        "online_sub" => user.online_sub,
+        "offline_sub" => user.offline_sub,
         "state" => user.state
       },
       key: user.uid
@@ -58,13 +59,15 @@ defmodule TwitchDiscordConnector.JsonDB.TwitchUserDB do
         uid: uid,
         info: Map.get(user_map, "info", nil),
         hook: Map.get(user_map, "hook", nil),
-        sub: Map.get(user_map, "sub", nil),
+        online_sub: Map.get(user_map, "online_sub", nil),
+        offline_sub: Map.get(user_map, "offline_sub", nil),
         state: Map.get(user_map, "state", %{})
       }
     end
   end
 
-  def load_sub(uid), do: load_user(uid).sub
+  def load_online_sub(uid), do: load_user(uid).online_sub
+  def load_offline_sub(uid), do: load_user(uid).offline_sub
 
   def load_hook(uid), do: load_user(uid).hook
 
@@ -78,10 +81,12 @@ defmodule TwitchDiscordConnector.JsonDB.TwitchUserDB do
     def to_string(s), do: "#{state_name(s)}#{state_flags(s)}"
     def state_name(%{uid: uid, info: nil}), do: "TUser[#{uid}]"
     def state_name(%{uid: uid, info: %{"display_name" => d}}), do: "TU[#{d}(#{uid})]"
-    def state_flags(s), do: "#{state_hook(s)}#{state_sub(s)}"
+    def state_flags(s), do: "#{state_hook(s)}#{state_subn(s)}#{state_subf(s)}"
     def state_hook(%{hook: nil}), do: "[_]"
     def state_hook(%{hook: _}), do: "[H]"
-    def state_sub(%{sub: nil}), do: "[_]"
-    def state_sub(%{sub: _}), do: "[S]"
+    def state_subn(%{online_sub: nil}), do: "[N_]"
+    def state_subn(%{online_sub: _}), do: "[NS]"
+    def state_subf(%{offline_sub: nil}), do: "[F_]"
+    def state_subf(%{offline_sub: _}), do: "[FS]"
   end
 end

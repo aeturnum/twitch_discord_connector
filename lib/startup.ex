@@ -1,4 +1,5 @@
 defmodule TwitchDiscordConnector.Startup do
+  alias TwitchDiscordConnector.Event
   alias TwitchDiscordConnector.Startup
   alias TwitchDiscordConnector.Template.Src
   alias TwitchDiscordConnector.Util.L
@@ -10,6 +11,10 @@ defmodule TwitchDiscordConnector.Startup do
     L.i("Begining startup tasks for #{inspect(build())}")
 
     load_sources()
+
+    L.i("Setting run level 1")
+
+    Event.set_run_level(1)
 
     L.i("Startup tasks complete")
   end

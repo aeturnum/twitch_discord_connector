@@ -46,17 +46,11 @@ defmodule TwitchDiscordConnector.Views.Router do
 
   # Twitch callback endpoints
 
-  get "/hook/stream" do
-    conn
-    |> Logger.log_call()
-    |> Routes.confirm_subscription()
-  end
-
   post "/hook/stream" do
     conn
     |> Plug.Conn.fetch_query_params()
     |> Logger.log_call()
-    |> Routes.handle_stream_notification()
+    |> Routes.handle_sub_webhook()
   end
 
   # static paths and 404s

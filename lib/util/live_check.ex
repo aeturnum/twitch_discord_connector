@@ -5,30 +5,39 @@ defmodule TwitchDiscordConnector.Util.Live do
 
   @name Live
   @live "https://twitch.naturecultur.es/live"
+  @ref make_ref() |> :erlang.ref_to_list() |> List.to_string()
 
   @spec get_ref() :: binary()
   def get_ref() do
-    GenServer.call(@name, :ref)
+    L.d("Starting get_ref...")
+
+    @ref
+    |> L.ins(label: "Ending get_ref...")
   end
 
   @spec is_live() :: boolean()
   def is_live() do
+    L.d("Starting is_live...")
+
     GenServer.call(@name, :live)
+    |> L.ins(label: "Ending is_live...")
   end
 
   # handle cast / call
 
-  def handle_call(:ref, _from, {ref, live}), do: {:reply, ref, {ref, live}}
+  # def handle_call(:ref, _from, {ref, live}), do: {:reply, ref, {ref, live}}
 
-  def handle_call(:live, _from, {ref, nil}) do
-    with live <- check_live(ref) do
+  def handle_call(:live, _from, nil) do
+    with live <- check_live() do
       if live == false do
         L.w("!!!!Server is not live!!!!")
       end
-      {:reply, live, {ref, live}}
+
+      {:reply, live, live}
     end
   end
-  def handle_call(:live, _from, {ref, live}), do: {:reply, live, {ref, live}}
+
+  def handle_call(:live, _from, live), do: {:reply, live, live}
 
   def handle_call(any, _from, state) do
     IO.puts("Twitch.Bot: unexpected call: #{inspect(any)}")
@@ -40,19 +49,20 @@ defmodule TwitchDiscordConnector.Util.Live do
     {:noreply, state}
   end
 
-
   # work functions
-  defp check_live(ref) do
+  defp check_live() do
     case HTTPoison.get(@live) do
-      {:ok, %{body: maybe_ref}} -> maybe_ref == ref
+      {:ok, %{body: maybe_ref}} ->
+        maybe_ref == @ref
+
       {:error, _} ->
         false
     end
+    |> L.ins(label: "check_live(#{inspect(@ref)}})")
   end
 
-
   # process functions
-  def init(_opts), do: {:ok, {make_ref() |> :erlang.ref_to_list() |> List.to_string(), nil}}
+  def init(_opts), do: {:ok, nil}
 
   def start_link(opts) do
     GenServer.start_link(__MODULE__, opts, name: @name)

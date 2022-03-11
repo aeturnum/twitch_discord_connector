@@ -47,7 +47,7 @@ defmodule TwitchDiscordConnector.MixProject do
       {:sweet_xml, "~> 0.6"},
       # Twitch Bot
       # {:blur, path: "/Users/ddrexler/src/elixir/blur"},
-      {:blur, git: "https://github.com/aeturnum/blur.git", branch: "0.3.0-beta1"},
+      # {:blur, git: "https://github.com/aeturnum/blur.git", branch: "0.3.0-beta1"},
       # test area
       {:excoveralls, "~> 0.13", only: :test}
     ]

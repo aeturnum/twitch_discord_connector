@@ -40,18 +40,19 @@ defmodule TwitchDiscordConnector.Event do
 
   alias TwitchDiscordConnector.Event
   alias TwitchDiscordConnector.Util.L
+  alias TwitchDiscordConnector.Event.Module
 
   @name Event
 
   @type delay_atom :: :in | :delay
   @type f_call() :: {fun(), list()}
   @type addr() :: integer() | :me
-  @type action() ::
-          {:brod, atom(), any()}
-          | {:send, addr(), atom(), any()}
-          | {:job, addr(), atom(), f_call()}
-          | {delay_atom(), integer(), action()}
-          | {:cancel, integer()}
+  # @type action() ::
+  #         {:brod, atom(), any()}
+  #         | {:send, addr(), atom(), any()}
+  #         | {:job, addr(), atom(), f_call()}
+  #         | {delay_atom(), integer(), action()}
+  #         | {:cancel, integer()}
   @type response() :: :ignore | {action(), map()} | {[action()], map()}
 
   @doc """
@@ -142,6 +143,16 @@ defmodule TwitchDiscordConnector.Event do
     GenServer.call(@name, {:get_state, address})
   end
 
+  @doc """
+  Set the run level of the internal vm.`
+
+  Returns `{:ok, listener_id}`
+  """
+  @spec set_run_level(integer()) :: :ok
+  def set_run_level(level) do
+    GenServer.call(@name, {:set_run_level, level})
+  end
+
   ########################
   ### Init ###############
   ########################
@@ -150,53 +161,98 @@ defmodule TwitchDiscordConnector.Event do
     GenServer.start_link(__MODULE__, modules, name: @name)
   end
 
+  @type name :: binary() | atom()
+  @type data :: any()
+  @type address :: atom() | integer()
+  @type func :: {fun(), list(any())}
+
+  @type broadcast :: {:brod, name()} | {:brod, name(), data()}
+  # `to` can be :me or addr
+  @type send :: {:send, address(), name(), data()} | {:send, address(), name()}
+  # `to` can be :me, :brod or addr
+  @type job :: {:job, address(), name(), func()}
+  # what can be any action
+  @type delay :: {:in, integer(), action()}
+  # cancel a delay task
+  @type cancel :: {:cancel, integer()}
+
+  @type action :: broadcast() | send() | job() | delay() | cancel()
+
+  @rl_halt :halt
+  @rl_running :running
+
+  @type state :: %{
+          run_level: atom(),
+          # next id for new modules
+          next_id: integer(),
+          # modules who are getting notified of events
+          listeners: list(Module.t()),
+          # unfinished tasks
+          tasks: list(Task.t()),
+          # actions to be executed
+          action_queue: list(action())
+        }
+
   def init(modules) do
     {
       :ok,
-      {
-        0,
-        # listeners
-        [],
-        # tasks
-        []
-      }
-      |> make_start_state(modules)
+      make_start_state(modules)
     }
   end
 
-  defp make_start_state({id, mods, tks}, modules) do
-    with mod_and_args <- Enum.map(modules, &to_mod_and_args/1),
-         {id, mods} <- Enum.reduce(mod_and_args, {id, mods}, &add_mod_to_list/2) do
-      {
-        id,
-        Enum.reverse(mods),
-        tks
-      }
-    end
+  defp make_start_state(modules) do
+    mod_and_args = Enum.map(modules, &to_mod_and_args/1)
+
+    state = %{
+      run_level: @rl_halt,
+      next_id: 0,
+      listeners: [],
+      tasks: [],
+      action_queue: []
+    }
+
+    Enum.reduce(
+      mod_and_args,
+      state,
+      &add_mod_as_listener/2
+    )
   end
 
   defp to_mod_and_args({mod, arg}), do: {mod, arg}
   defp to_mod_and_args(mod), do: {mod, []}
 
-  # defp send_event(lis = {m_id, mod, m_ch, last_state}, {channel, name, from}, {type, data}) do
-  defp add_mod_to_list({mod, arg}, {next_id, list}) do
-    with channel <- mod.channel(),
-         mod_state <- mod.init(arg),
-         init_listener <- {next_id, mod, channel, mod_state},
-         state_tuple <- send_event(init_listener, {:event, :added, :event}, {:send, %{}}) do
-      L.d("Added #{lis_s(state_tuple)} with Module #{inspect(mod)}")
-      {next_id + 1, [state_tuple | list]}
-    end
+  defp add_mod_as_listener({mod, arg}, state) do
+    module = Module.new(state.next_id, {mod, arg})
+    L.d("[Event] Added #{module} with Module #{inspect(mod)}")
+
+    module =
+      case state.run_level do
+        :halt ->
+          module
+
+        _ ->
+          initialize_module(module)
+      end
+
+    %{state_inc_id(state) | listeners: [module | state.listeners]}
   end
+
+  defp initialize_module(module = %{status: :created}) do
+    send_event(module, {:event, :added, :event}, {:send, %{}})
+    # |> L.ins(label: "[Event] initialize_module(#{ins(module)})")
+  end
+
+  defp initialize_module(module), do: module
 
   ########################
   ### Handles ############
   ########################
 
-  def handle_call({:add_lis, module, init_arg}, _from, {nid, mod_list, tsks}) do
-    with {id, new_list} <- add_mod_to_list({module, init_arg}, {nid, mod_list}) do
-      {:reply, {:ok, nid}, {id, new_list, tsks}}
-    end
+  @spec handle_call(any(), any(), state()) :: {:reply, any(), state()}
+  def handle_call({:add_lis, module, init_arg}, _from, state) do
+    # todo: maybe init?
+    new_state = add_mod_as_listener({module, init_arg}, state)
+    {:reply, {:ok, new_state.next_id}, new_state}
   end
 
   def handle_call({:get_state, addr}, _from, s) do
@@ -205,72 +261,116 @@ defmodule TwitchDiscordConnector.Event do
     end
   end
 
+  # this doesn't handle unexpected transitions but it's fine
+  def handle_call({:set_run_level, 0}, _from, s) do
+    {:reply, :ok, %{s | run_level: 0}}
+  end
+
+  def handle_call({:set_run_level, 1}, _from, s) do
+    s = %{s | run_level: 1}
+    s = %{s | listeners: Enum.map(s.listeners, &initialize_module/1)}
+
+    s =
+      Enum.reduce(
+        s.action_queue,
+        s,
+        fn action, state ->
+          L.i("[Event] processing action: #{ins(action)}")
+          process_action(action, state)
+        end
+      )
+
+    {:reply, :ok, %{s | action_queue: []}}
+  end
+
   def handle_call(info, _from, state) do
-    L.e("Manager: unexpected call: #{inspect(info)}")
+    L.e("[Event] unexpected call: #{inspect(info)}")
     {:reply, nil, state}
   end
 
-  def handle_cast({{:brod, data}, src}, state) do
-    {:noreply, send_broadcast(state, src, data)}
-  end
+  def handle_cast(action?, state) do
+    {:noreply,
+     case action_type(action?) do
+       :unknown ->
+         L.e("Manager: unexpected cast: #{inspect(action?)}")
+         state
 
-  def handle_cast({{:send, to, data}, src}, state) do
-    {:noreply, send_send(state, src, to, data)}
-  end
-
-  def handle_cast({:delay, name, ms, action, context}, state) do
-    {:noreply, delay_action(state, name, ms, action, context)}
-  end
-
-  def handle_cast({{:job, to, func, args}, src}, state) do
-    {:noreply, start_job(state, to, {func, args}, src)}
-  end
-
-  def handle_cast({:cancel_delay, delay_id}, state) do
-    {:noreply, cancel_delay(state, delay_id)}
+       _ ->
+         process_action(action?, state)
+     end}
   end
 
   # todo: add shutdown event
+
+  defp action_type({{:brod, _data}, _src}), do: :brod
+  defp action_type({{:send, _to, _data}, _src}), do: :send
+  defp action_type({:delay, _name, _ms, _action, _context}), do: :delay
+  defp action_type({{:job, _to, _func, _args}, _src}), do: :job
+  defp action_type({:cancel_delay, _delay_id}), do: :cancel
+  defp action_type(_), do: :unknown
+
+  defp process_action(action, state = %{run_level: rl}) do
+    if rl < 1 do
+      #
+      %{state | action_queue: state.actions ++ [action]}
+    else
+      case action do
+        {{:brod, data}, src} ->
+          send_broadcast(state, src, data)
+
+        {{:send, to, data}, src} ->
+          send_send(state, src, to, data)
+
+        {:delay, name, ms, action, context} ->
+          delay_action(state, name, ms, action, context)
+
+        {{:job, to, func, args}, src} ->
+          start_job(state, to, {func, args}, src)
+
+        {:cancel_delay, delay_id} ->
+          cancel_delay(state, delay_id)
+      end
+
+      # |> L.ins(label: "[Event] executing action #{inspect(action)}")
+    end
+  end
 
   #######################
   ### Doers #############
   #######################
 
-  defp send_broadcast({nid, mod_info, tsks}, src, data) do
-    {
-      nid,
-      mod_info
-      |> Enum.map(fn listener ->
-        send_event(listener, src, {:brod, data})
-      end),
-      tsks
-    }
-  end
-
-  defp send_send({nid, mod_info, tsks}, src, to, data) do
-    {
-      nid,
-      mod_info
-      |> Enum.map(fn lis = {addr, _, _, _} ->
-        case addr == to do
-          false -> lis
-          true -> send_event(lis, src, {:send, data})
+  defp send_broadcast(state, src, data) do
+    Map.update!(state, :listeners, fn listeners ->
+      Enum.map(
+        listeners,
+        fn listener ->
+          send_event(listener, src, {:brod, data})
         end
-      end),
-      tsks
-    }
+      )
+    end)
   end
 
-  defp delay_action({id, mod_info, tsks}, name, ms, action, context) do
+  defp send_send(state, src, to, data) do
+    Map.update!(state, :listeners, fn listeners ->
+      Enum.map(
+        listeners,
+        fn
+          mod = %{id: addr} when addr == to ->
+            send_event(mod, src, {:send, data})
+
+          mod ->
+            mod
+        end
+      )
+    end)
+  end
+
+  defp delay_action(state = %{tasks: tsks}, name, ms, action, context) do
     with {from, _} <- context,
          {:ok, tsk} <- Task.start(fn -> do_delay_action(name, ms, {action, context}) end),
          # send notification that task can be cancelled
          :ok <- Event.send({:event, :delay_started}, {from, from}, {name, tsk}) do
-      {
-        id,
-        mod_info,
-        [tsk | tsks]
-      }
+      %{state | tasks: [tsk | tsks]}
     end
   end
 
@@ -279,10 +379,11 @@ defmodule TwitchDiscordConnector.Event do
     state
   end
 
-  defp cancel_delay({id, mod_info, tsks}, delay_id) do
+  defp cancel_delay(state = %{tasks: tsks}, delay_id) do
     # this is possible because the "task id" we provide is just the task handle
     Task.shutdown(delay_id, 0)
-    {id, mod_info, tsks |> Enum.filter(fn tsk -> tsk != delay_id end)}
+    %{state | tasks: Enum.filter(tsks, fn tsk -> tsk != delay_id end)}
+    # {id, mod_info, tsks |> Enum.filter(fn tsk -> tsk != delay_id end)}
   end
 
   defp do_delay_action(name, ms, {action, {from_id, channel}}) do
@@ -291,13 +392,13 @@ defmodule TwitchDiscordConnector.Event do
 
     L.d("#{inspect(name)}: executing #{inspect(action)}")
 
-    norm_action(action, from_id)
-    |> handle_response({from_id, channel})
+    Module.norm_action(action, from_id)
+    |> handle_action({from_id, channel})
     |> L.ins()
   end
 
   defp do_job({f, args}, to, {job_channel, name, from}) do
-    # L.d("Running job[#{inspect(name)}]...")
+    L.d("Running job[#{inspect(name)}]...")
     r = do_apply(f, args)
     L.d("Job[#{inspect(name)}] #{inspect(f)}(#{inspect(args)}) -> #{inspect(r, pretty: true)}")
 
@@ -316,97 +417,31 @@ defmodule TwitchDiscordConnector.Event do
   #     {name, data}
   #   state is state
 
-  defp send_event(lis = {mod_id, mod, mod_ch, last_state}, {ev_ch, name, from}, {type, data}) do
+  @spec send_event(Module.t(), Module.source(), Module.event_data()) :: Module.t()
+  defp send_event(module, src, event_data) do
     # L.d("send_event(#{lis_s(lis)}, #{inspect({ev_ch, name, from})}, #{inspect({type, data})})")
 
-    {
-      mod_id,
-      mod,
-      mod_ch,
-      with ctx <- make_context(type, ev_ch, from, mod_id),
-           event <- {name, data} do
-        try do
-          mod.handle_event(ctx, event, last_state)
-        rescue
-          FunctionClauseError ->
-            # last_state
-            # |> L.ins(
-            #   label: "#{lis_s(lis)} does not handle (#{inspect(ctx)}, #{inspect(event)}, state)"
-            # )
-
-            :ignore
-
-          other ->
-            L.e(
-              "Unknown error when calling (#{inspect(ctx)}, #{inspect(event)}, state)
-              on #{lis_s(lis)}: #{inspect(other)}"
-            )
-
-            :ignore
-        end
-        |> normalize_response({mod_id, last_state})
-        |> do_responses({lis, ctx, event})
-      end
-    }
+    {new_module, actions} = Module.send_event(module, src, event_data)
+    # side effects!
+    do_responses(actions, new_module)
+    new_module
   end
 
-  defp make_context(:send, channel, from, to) do
-    case from == to do
-      true -> {:send, :me}
-      false -> {:send, channel}
-    end
-  end
+  defp do_responses([], _), do: :ok
 
-  defp make_context(:brod, channel, _, _), do: {:brod, channel}
+  defp do_responses(action_list, actor) do
+    logs =
+      Enum.map(action_list, fn action -> handle_action(action, {actor.id, actor.channel}) end)
 
-  defp normalize_response(:ignore, {_, last_state}), do: {:ignore, last_state}
-  defp normalize_response({:ok, s}, _), do: {:ok, s}
+    L.d([
+      "#{actor}() ->",
+      "{",
+      "#{Enum.join(logs, "\n")},",
+      "#{inspect(actor.state, pretty: true)},",
+      "}"
+    ])
 
-  defp normalize_response({a, s}, info) when not is_list(a),
-    do: normalize_response({[a], s}, info)
-
-  defp normalize_response({a, s}, {my_id, _}) do
-    # L.i("Final normalize_response: {#{inspect(a)}, s}")
-
-    {
-      Enum.map(
-        a,
-        fn a -> norm_action(a, my_id) end
-      ),
-      s
-    }
-  end
-
-  defp norm_action(a = {:brod, _}, _), do: Tuple.append(a, nil)
-  defp norm_action(a = {:brod, _, _}, _), do: a
-  defp norm_action({:send, to, name}, my_id), do: {:send, to_addr(to, my_id), name, nil}
-  defp norm_action({:send, to, name, data}, my_id), do: {:send, to_addr(to, my_id), name, data}
-  defp norm_action({:in, name, ms, what}, _), do: {:delay, name, ms, what}
-  defp norm_action({:job, to, name, f}, my_id), do: {:job, to_addr(to, my_id), name, f}
-
-  defp to_addr(:brod, _), do: :brod
-  defp to_addr(:me, my_id), do: my_id
-  defp to_addr(other, _), do: other
-
-  defp do_responses({:ignore, state}, _) do
-    # L.d("#{lis_s(lis)}(#{inspect(ctx)},#{inspect(event)}) -> :ignore")
-    state
-  end
-
-  defp do_responses({:ok, state}, {lis, ctx, event}) do
-    L.ins(state, label: "#{lis_s(lis)}(#{inspect(ctx)},#{inspect(event)}) -> {:ok, ")
-  end
-
-  defp do_responses({action_list, state}, {lis, ctx, event}) do
-    with {from, _mod, channel, _state} <- lis do
-      logs = Enum.map(action_list, fn action -> handle_response(action, {from, channel}) end)
-      L.d("#{lis_s(lis)}(#{inspect(ctx)},#{inspect(event)}) ->
-{
-#{Enum.join(logs, "\n")},
-#{inspect(state, pretty: true)},
-}")
-      state
-    end
+    :ok
   end
 
   #   {:brod, name, data \\ nil}
@@ -415,41 +450,44 @@ defmodule TwitchDiscordConnector.Event do
   #   {:in, ms, what} # what can be any action
   #   {:cancel, delay_id} # cancel a delay task
 
-  defp handle_response({:brod, name, data}, {_, channel}) do
+  defp handle_action({:brod, name, data}, {_, channel}) do
     # queue broadcast
     Event.broadcast({channel, name}, data)
-    "broadcast] |#{inspect({channel, name})}|: #{inspect(data)})"
+    "broadcast] |#{inspect({channel, name})}|: #{L.to_s(data)})"
   end
 
-  defp handle_response({:send, to, name, data}, {from, channel}) do
+  defp handle_action({:send, to, name, data}, {from, channel}) do
     # queue broadcast
     Event.send({channel, name}, {from, to}, data)
-    "send] |#{inspect({channel, name})}| #{inspect(from)} -> #{inspect(to)}: #{inspect(data)})"
+    "send] |#{inspect({channel, name})}| #{inspect(from)} -> #{inspect(to)}: #{L.to_s(data)})"
   end
 
-  defp handle_response({:job, to, name, {func, args}}, {from, _}) do
+  defp handle_action({:job, to, name, {func, args}}, {from, _}) do
     Event.job(name, {from, to}, func, args)
-    "starting job] #{inspect({name})} for #{inspect(to)}: #{inspect(func)}(#{inspect(args)}))"
+    "starting job] #{inspect({name})} for #{inspect(to)}: #{inspect(func)}(#{L.to_s(args)}))"
   end
 
-  defp handle_response({:delay, name, ms, action}, ctx) do
+  defp handle_action({:delay, name, ms, action}, ctx) do
     delay(name, ms, action, ctx)
-    "delay] #{inspect(name)} in #{ms}ms: #{inspect(action)})"
+    "delay] #{inspect(name)} in #{ms}ms: #{L.to_s(action)})"
   end
 
-  defp handle_response({:cancel, delay_id}, _) do
+  defp handle_action({:cancel, delay_id}, _) do
     cancel_delay(delay_id)
     "cancelling] delay #{delay_id}"
   end
 
-  defp handle_response({unknown, state}, channel) do
-    L.ins(unknown, label: "handle_response unknown argument from #{inspect(channel)}")
+  defp handle_action({unknown, state}, channel) do
+    L.ins(unknown, label: "handle_action unknown argument from #{inspect(channel)}")
     state
   end
 
   ########################
   ### Helpers ############
   ########################
+
+  @spec state_inc_id(state()) :: state()
+  defp state_inc_id(s = %{next_id: nid}), do: %{s | next_id: nid + 1}
 
   defp find_addr(s, addr) do
     # {next_id, listeners, tasks}
@@ -471,5 +509,7 @@ defmodule TwitchDiscordConnector.Event do
   defp do_apply(f, args) when is_list(args), do: apply(f, args)
   defp do_apply(f, arg), do: apply(f, [arg])
 
-  defp lis_s({m_id, _mod, m_ch, _last_state}), do: "#{m_ch}[#{m_id}]"
+  defp ins(o), do: inspect(o, pretty: true)
+
+  # defp lis_s({m_id, _mod, m_ch, _last_state}), do: "#{m_ch}[#{m_id}]"
 end

@@ -12,10 +12,17 @@ defmodule TwitchDiscordConnector do
 
     with env <- Application.get_env(:twitch_discord_connector, :environment),
          {:ok, pid} <- start_internal_processes() do
-      # Call all startup tasks now that the superviser has been started
+      # start outward facing layer
+      L.i("[TDC] Start")
+
+      Enum.each(external_processes(env), fn child ->
+        Supervisor.start_child(pid, child)
+        |> L.ins(label: "Starting External Process: #{elem(child, 0)}")
+      end)
+
+      # Call all startup tasks now that internal and external services are up
       TwitchDiscordConnector.Startup.startup_tasks()
-      # start final layer
-      Enum.each(external_processes(env), fn child -> Supervisor.start_child(pid, child) end)
+      L.i("[TDC] Done with Start")
       {:ok, pid}
     else
       other ->
@@ -37,8 +44,9 @@ defmodule TwitchDiscordConnector do
 
   defp external_processes(_) do
     [
-      {Plug.Cowboy, scheme: :http, plug: TwitchDiscordConnector.Views.Router, options: [port: 4000]},
-      {TwitchDiscordConnector.Twitch.Bot, settings(:init_bot)}
+      {Plug.Cowboy,
+       scheme: :http, plug: TwitchDiscordConnector.Views.Router, options: [port: 4000]}
+      # {TwitchDiscordConnector.Twitch.Bot, settings(:init_bot)}
     ]
   end
 

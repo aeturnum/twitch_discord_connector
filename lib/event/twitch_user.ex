@@ -23,6 +23,8 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
 
   # startup event
   def handle_event({:send, :event}, {:added, _}, s) do
+    L.i("[TwitchUser] Was added...")
+
     if Live.is_live() do
       {[], s}
       |> maybe_get_info()
@@ -31,6 +33,7 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
       {[], s}
       |> maybe_get_info()
     end
+    |> L.ins(label: "[TwitchUser] Added return")
   end
 
   ##################
@@ -73,32 +76,66 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
     })
   end
 
-  def handle_event({:send, :me}, {:subscribe, info}, state) do
+  # values ms   * sec * min * hours
+  @one_day 1000 * 60 * 60 * 24
+
+  def handle_event({:send, :me}, {:subscribe_status, info}, state) do
     unwrap_result(info, state, %{
-      :ok => fn sub ->
-        with new_state <- %{state | sub: sub} |> TwitchUserDB.save_user() do
-          {sub_later(new_state), new_state}
-        end
+      :ok => fn sub_list ->
+        actions =
+          [
+            {"stream.online", sub_online_job(state)},
+            {"stream.offline", sub_offline_job(state)}
+          ]
+          |> Enum.reduce(
+            [sub_status_later(state, @one_day)],
+            fn {to_check, job}, task_list ->
+              unless to_check in sub_list do
+                [job | task_list]
+              else
+                task_list
+              end
+            end
+          )
+
+        {actions, state}
       end,
-      :error => fn {code, error_info} ->
-        case code do
-          401 ->
-            # really we should have a job do this...
-            Twitch.Auth.refresh_auth()
-
-          _ ->
-            nil
-        end
-
-        L.e("Error subbing: #{inspect(error_info)}")
-        {sub_later(state, 30 * 1000), state}
-      end
+      :error =>
+        error_function("Error Checking Subscription", sub_status_later(state, 30 * 1000), state)
     })
 
     # with sub <- unwrap_result(info, state),
     #      new_state <- %{state | sub: sub} |> TwitchUserDB.save_user() do
     #   {sub_later(new_state), new_state}
     # end
+  end
+
+  def handle_event({:send, :me}, {:subscribe_online, info}, state) do
+    unwrap_result(info, state, %{
+      :ok => fn on_sub ->
+        {[], %{state | online_sub: on_sub} |> TwitchUserDB.save_user()}
+      end,
+      :error =>
+        error_function(
+          "Error Subscribing Online",
+          Helpers.delay(30 * 1000, sub_online_job(state)),
+          state
+        )
+    })
+  end
+
+  def handle_event({:send, :me}, {:subscribe_offline, info}, state) do
+    unwrap_result(info, state, %{
+      :ok => fn off_sub ->
+        {[], %{state | offline_sub: off_sub} |> TwitchUserDB.save_user()}
+      end,
+      :error =>
+        error_function(
+          "Error Subscribing Offline",
+          Helpers.delay(30 * 1000, sub_offline_job(state)),
+          state
+        )
+    })
   end
 
   ####################
@@ -124,46 +161,64 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
   # get info if it's nil
   defp maybe_get_info({a, s = %{info: nil}}) do
     {
-      [{:job, :me, :user_info, info_call(s)} | a],
+      [Helpers.job(:user_info, info_call(s)) | a],
       s
     }
   end
 
   # broadcast info if we have it
   defp maybe_get_info({a, s}) do
-    {
-       [ info_broadcast(s) | a],
-       s
-    }
-  end
-
-  defp schedule_sub_and_return({a, s = %{info: nil}}) do
-    {
-      [sub_job(s) | a],
-      s
-    }
+    {[info_broadcast(s) | a], s}
   end
 
   defp schedule_sub_and_return({a, s}) do
-    {
-      [sub_later(s) | a],
-      s
-    }
+    {[sub_status_later(s) | a], s}
   end
 
   # delay is in ms
-  defp sub_later(s = %{sub: s_i}, delay \\ 0),
-    do: {:in, :sub_delay, Expires.expires_in?(s_i) + delay, sub_job(s)}
+  # defp sub_later(s, delay \\ 0),
+  #   do: {:in, :sub_delay, Expires.expires_in?(s_i) + delay, sub_job(s)}
 
-  defp sub_job(s), do: {:job, :me, :subscribe, sub_call(s)}
+  # defp sub_later(s, delay \\ 0), do: Helpers.delay(delay, sub_job(s))
+  defp sub_status_later(s, delay \\ 0), do: Helpers.delay(delay, sub_status_job(s))
+
+  defp sub_status_job(s), do: Helpers.job(:subscribe_status, sub_status_call(s), :me)
+  defp sub_online_job(s), do: Helpers.job(:subscribe_online, sub_online_call(s), :me)
+  defp sub_offline_job(s), do: Helpers.job(:subscribe_offline, sub_offline_call(s), :me)
   # defp do_disc_hook(s), do: {:in, :disc_delay, 60 * 1000 * 3, {:job, :me, :hook, disc_call(s)}}
 
   defp info_broadcast(s) do
-    {:brod, :twitch_user_info, s}
+    Helpers.broadcast(:twitch_user_info, s)
   end
-  defp info_call(s), do: {&Twitch.User.info_id/1, [s.uid]}
-  defp sub_call(s), do: {&Twitch.Subs.subscribe/2, [s.uid, 60 * 60 * 8]}
+
+  defp info_call(s), do: Helpers.function_call(&Twitch.User.info_id/1, [s.uid])
+
+  defp sub_status_call(s),
+    do: Helpers.function_call(&Twitch.Subs.current_subscriptions/1, [s.uid])
+
+  defp sub_online_call(s),
+    do: Helpers.function_call(&Twitch.Subs.subscribe_online/1, [s.uid])
+
+  defp sub_offline_call(s),
+    do: Helpers.function_call(&Twitch.Subs.subscribe_offline/1, [s.uid])
+
   # defp disc_call(s), do: {&Discord.webhook/1, [s.uid]}
+
+  defp error_function(label, error_call, state) do
+    fn {code, error_info} ->
+      case code do
+        401 ->
+          # really we should have a job do this...
+          Twitch.Auth.refresh_auth()
+
+        _ ->
+          nil
+      end
+
+      L.e("#{label}: #{inspect(error_info)}")
+      {error_call, state}
+    end
+  end
 
   defp unwrap_result(result, state, func_map) do
     func_map = Map.put_new(func_map, :ok, fn x -> x end)

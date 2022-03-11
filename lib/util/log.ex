@@ -112,6 +112,7 @@ defmodule TwitchDiscordConnector.Util.L do
 
   defp loc_prefix, do: loc_name(top_frame())
 
+  defp log_str(s) when is_list(s), do: log_str(Enum.join(s, "\n"))
   defp log_str(s), do: "#{loc_prefix()} #{s}"
 
   def d(s), do: do_log(log_str(s), &Logger.debug/1)
