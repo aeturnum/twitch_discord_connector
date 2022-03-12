@@ -2,11 +2,10 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
   alias TwitchDiscordConnector.JsonDB.TwitchUserDB
 
   alias TwitchDiscordConnector.Twitch
-  alias TwitchDiscordConnector.Util.H
-  alias TwitchDiscordConnector.Util.Expires
+  # alias TwitchDiscordConnector.Util.H
   alias TwitchDiscordConnector.Util.L
   alias TwitchDiscordConnector.Util.Live
-  alias TwitchDiscordConnector.Twitch.Bot
+  # alias TwitchDiscordConnector.Twitch.Bot
   alias TwitchDiscordConnector.Event.Helpers
 
   # opts = {info, flags = %{}}
@@ -33,7 +32,8 @@ defmodule TwitchDiscordConnector.Event.TwitchUser do
       {[], s}
       |> maybe_get_info()
     end
-    |> L.ins(label: "[TwitchUser] Added return")
+
+    # |> L.ins(label: "[TwitchUser] Added return")
   end
 
   ##################

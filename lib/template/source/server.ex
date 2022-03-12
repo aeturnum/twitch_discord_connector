@@ -2,12 +2,14 @@ defmodule TwitchDiscordConnector.Template.SrcServer do
   @name TemplateSrcServer
   use GenServer
 
+  use Stenotype
+
   alias TwitchDiscordConnector.Util.L
 
   def register(src = %{path: path}) do
     GenServer.cast(@name, {:register, path, src})
 
-    L.i("Source #{path} registered!")
+    info("Source #{path} registered!")
     src
   end
 

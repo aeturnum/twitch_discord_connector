@@ -1,6 +1,8 @@
 defmodule TwitchDiscordConnector.Event.Module do
   alias TwitchDiscordConnector.Util.L
 
+  use Stenotype
+
   defstruct elixir_module: nil, channel: :unset, state: %{}, id: :unset, status: :created
 
   @type event_addr :: integer() | atom()
@@ -17,7 +19,7 @@ defmodule TwitchDiscordConnector.Event.Module do
           status: status()
         }
 
-  @init_name :added
+  # @init_name :added
   @status_created :created
   @status_running :running
 
@@ -56,7 +58,7 @@ defmodule TwitchDiscordConnector.Event.Module do
         :ignore
 
       other ->
-        L.e("Unknown error when calling (#{inspect(context)}, #{inspect(event)}, state)
+        error("Unknown error when calling (#{inspect(context)}, #{inspect(event)}, state)
           on #{module}: #{L.to_s(other)}")
 
         :ignore
@@ -80,19 +82,18 @@ defmodule TwitchDiscordConnector.Event.Module do
   defp update_status(arg, _), do: arg
 
   defp log_result(result, ctx, event, module) do
-    label =
-      "Mod[#{L.to_s(module.elixir_module)}] handle_event(#{L.to_s(ctx)}, #{L.to_s(event)}, state)"
+    label = "Mod[#{to_s(module.elixir_module)}] handle_event(#{to_s(ctx)}, #{to_s(event)}, state)"
 
     case result do
       :ignore ->
-        L.d(label <> " -> :ignore")
+        debug(label <> " -> :ignore")
 
       {:ok, s} ->
-        L.d(label <> " ->\n\\->State: #{L.to_s(s)}")
+        debug(label <> " ->\n\\->State: #{to_s(s)}")
 
       {acts, s} ->
-        act_str = acts |> List.wrap() |> Enum.map(fn a -> L.to_s(a) end) |> Enum.join("\\-- ")
-        L.d(label <> " -\\\n\\->State: #{L.to_s(s)} \\->Actions:\n #{act_str}")
+        act_str = acts |> List.wrap() |> Enum.map(fn a -> to_s(a) end) |> Enum.join("\n\\-- ")
+        debug(label <> " -\\\n\\->State: #{to_s(s)} \n\\->Actions:\n #{act_str}")
     end
 
     result

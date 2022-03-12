@@ -5,23 +5,25 @@ defmodule TwitchDiscordConnector.Startup do
   alias TwitchDiscordConnector.Util.L
   alias TwitchDiscordConnector.Template.SrcServer
 
+  use Stenotype
+
   def build(), do: Application.get_env(:twitch_discord_connector, :environment)
 
   def startup_tasks() do
-    L.i("Begining startup tasks for #{inspect(build())}")
+    info("Begining startup tasks for #{inspect(build())}")
 
     load_sources()
 
-    L.i("Setting run level 1")
+    info("Setting run level 1")
 
     Event.set_run_level(1)
 
-    L.i("Startup tasks complete")
+    info("Startup tasks complete")
   end
 
   # todo: figure out why this can't be a module variable
   def load_sources do
-    L.i("Registering Sources...")
+    info("Registering Sources...")
 
     Startup.__info__(:functions)
     |> Enum.reduce(
@@ -35,7 +37,7 @@ defmodule TwitchDiscordConnector.Startup do
     )
     |> Enum.each(fn src_maker -> SrcServer.register(src_maker.()) end)
 
-    L.i("Sources registered")
+    info("Sources registered")
   end
 
   # Source creators

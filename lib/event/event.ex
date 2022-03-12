@@ -37,6 +37,7 @@ defmodule TwitchDiscordConnector.Event do
   listener: {id, elixir_module, tag, state}
   """
   use GenServer
+  use Stenotype
 
   alias TwitchDiscordConnector.Event
   alias TwitchDiscordConnector.Util.L
@@ -223,7 +224,7 @@ defmodule TwitchDiscordConnector.Event do
 
   defp add_mod_as_listener({mod, arg}, state) do
     module = Module.new(state.next_id, {mod, arg})
-    L.d("[Event] Added #{module} with Module #{inspect(mod)}")
+    debug("[Event] Added #{module} with Module #{inspect(mod)}")
 
     module =
       case state.run_level do
@@ -275,7 +276,7 @@ defmodule TwitchDiscordConnector.Event do
         s.action_queue,
         s,
         fn action, state ->
-          L.i("[Event] processing action: #{ins(action)}")
+          info("[Event] processing action: #{to_s(action)}")
           process_action(action, state)
         end
       )
@@ -284,7 +285,7 @@ defmodule TwitchDiscordConnector.Event do
   end
 
   def handle_call(info, _from, state) do
-    L.e("[Event] unexpected call: #{inspect(info)}")
+    error("[Event] unexpected call: #{inspect(info)}")
     {:reply, nil, state}
   end
 
@@ -292,7 +293,7 @@ defmodule TwitchDiscordConnector.Event do
     {:noreply,
      case action_type(action?) do
        :unknown ->
-         L.e("Manager: unexpected cast: #{inspect(action?)}")
+         error("Manager: unexpected cast: #{inspect(action?)}")
          state
 
        _ ->
@@ -387,10 +388,10 @@ defmodule TwitchDiscordConnector.Event do
   end
 
   defp do_delay_action(name, ms, {action, {from_id, channel}}) do
-    L.d("#{inspect(name)}: delaying #{inspect(action)} by #{ms}ms")
+    debug("#{to_s(name)}: delaying #{to_s(action)} by #{ms}ms")
     :timer.sleep(ms)
 
-    L.d("#{inspect(name)}: executing #{inspect(action)}")
+    debug("#{to_s(name)}: executing #{to_s(action)}")
 
     Module.norm_action(action, from_id)
     |> handle_action({from_id, channel})
@@ -398,9 +399,9 @@ defmodule TwitchDiscordConnector.Event do
   end
 
   defp do_job({f, args}, to, {job_channel, name, from}) do
-    L.d("Running job[#{inspect(name)}]...")
+    debug("Running job[#{to_s(name)}]...")
     r = do_apply(f, args)
-    L.d("Job[#{inspect(name)}] #{inspect(f)}(#{inspect(args)}) -> #{inspect(r, pretty: true)}")
+    debug("Job[#{to_s(name)}] #{to_s(f)}(#{to_s(args)}) -> #{to_s(r)}")
 
     case to do
       :brod -> Event.broadcast({job_channel, name}, r)
@@ -433,11 +434,11 @@ defmodule TwitchDiscordConnector.Event do
     logs =
       Enum.map(action_list, fn action -> handle_action(action, {actor.id, actor.channel}) end)
 
-    L.d([
+    debug([
       "#{actor}() ->",
       "{",
       "#{Enum.join(logs, "\n")},",
-      "#{inspect(actor.state, pretty: true)},",
+      "#{to_s(actor.state)},",
       "}"
     ])
 
@@ -453,23 +454,23 @@ defmodule TwitchDiscordConnector.Event do
   defp handle_action({:brod, name, data}, {_, channel}) do
     # queue broadcast
     Event.broadcast({channel, name}, data)
-    "broadcast] |#{inspect({channel, name})}|: #{L.to_s(data)})"
+    "broadcast] |#{to_s({channel, name})}|: #{to_s(data)})"
   end
 
   defp handle_action({:send, to, name, data}, {from, channel}) do
     # queue broadcast
     Event.send({channel, name}, {from, to}, data)
-    "send] |#{inspect({channel, name})}| #{inspect(from)} -> #{inspect(to)}: #{L.to_s(data)})"
+    "send] |#{to_s({channel, name})}| #{to_s(from)} -> #{to_s(to)}: #{to_s(data)})"
   end
 
   defp handle_action({:job, to, name, {func, args}}, {from, _}) do
     Event.job(name, {from, to}, func, args)
-    "starting job] #{inspect({name})} for #{inspect(to)}: #{inspect(func)}(#{L.to_s(args)}))"
+    "starting job] #{to_s({name})} for #{to_s(to)}: #{to_s(func)}(#{to_s(args)}))"
   end
 
   defp handle_action({:delay, name, ms, action}, ctx) do
     delay(name, ms, action, ctx)
-    "delay] #{inspect(name)} in #{ms}ms: #{L.to_s(action)})"
+    "delay] #{to_s(name)} in #{ms}ms: #{to_s(action)})"
   end
 
   defp handle_action({:cancel, delay_id}, _) do
