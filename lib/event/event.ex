@@ -180,7 +180,7 @@ defmodule TwitchDiscordConnector.Event do
   @type action :: broadcast() | send() | job() | delay() | cancel()
 
   @rl_halt :halt
-  @rl_running :running
+  # @rl_running :running
 
   @type state :: %{
           run_level: atom(),
@@ -510,7 +510,7 @@ defmodule TwitchDiscordConnector.Event do
   defp do_apply(f, args) when is_list(args), do: apply(f, args)
   defp do_apply(f, arg), do: apply(f, [arg])
 
-  defp ins(o), do: inspect(o, pretty: true)
+  # defp ins(o), do: inspect(o, pretty: true)
 
   # defp lis_s({m_id, _mod, m_ch, _last_state}), do: "#{m_ch}[#{m_id}]"
 end

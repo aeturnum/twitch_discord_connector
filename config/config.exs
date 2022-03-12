@@ -7,6 +7,9 @@ config :ex_aws, :s3,
   host: "sfo2.digitaloceanspaces.com",
   region: "sfo2"
 
-config :logger, :console, format: {TwitchDiscordConnector.Util.L, :format}
+# config :logger, :console, format: {TwitchDiscordConnector.Util.L, :format}
+config :logger, :console,
+  format: {Stenotype.Output.Logger, :format},
+  metadata: [:stenotype, :statement]
 
 import_config "#{config_env()}.exs"

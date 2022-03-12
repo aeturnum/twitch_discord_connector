@@ -4,7 +4,7 @@ defmodule TwitchDiscordConnector.Template.SrcServer do
 
   use Stenotype
 
-  alias TwitchDiscordConnector.Util.L
+  # alias TwitchDiscordConnector.Util.L
 
   def register(src = %{path: path}) do
     GenServer.cast(@name, {:register, path, src})

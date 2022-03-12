@@ -5,9 +5,9 @@ defmodule TwitchDiscordConnector.Event.DiscEvents do
   Listens for events that might trigger messages to discord.
   """
 
-  alias TwitchDiscordConnector.JsonDB.TwitchUserDB
+  # alias TwitchDiscordConnector.JsonDB.TwitchUserDB
   alias TwitchDiscordConnector.Discord
-  alias TwitchDiscordConnector.Util.L
+  # alias TwitchDiscordConnector.Util.L
 
   # state: {user id, hook url, [keyword list]}
   def init({user_id, user_info}) do
@@ -89,14 +89,14 @@ defmodule TwitchDiscordConnector.Event.DiscEvents do
     {:ok, s}
   end
 
-  defp delay_asking_for_info() do
-    {
-      :in,
-      :info_wait,
-      3 * 1000,
-      {:send, :me, :get_info, nil}
-    }
-  end
+  # defp delay_asking_for_info() do
+  #   {
+  #     :in,
+  #     :info_wait,
+  #     3 * 1000,
+  #     {:send, :me, :get_info, nil}
+  #   }
+  # end
 
   defp do_disc_hook(s) do
     {

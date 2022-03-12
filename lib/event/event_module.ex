@@ -89,11 +89,10 @@ defmodule TwitchDiscordConnector.Event.Module do
         debug(label <> " -> :ignore")
 
       {:ok, s} ->
-        debug(label <> " ->\n\\->State: #{to_s(s)}")
+        debug([label, "State: #{to_s(s)}"])
 
       {acts, s} ->
-        act_str = acts |> List.wrap() |> Enum.map(fn a -> to_s(a) end) |> Enum.join("\n\\-- ")
-        debug(label <> " -\\\n\\->State: #{to_s(s)} \n\\->Actions:\n #{act_str}")
+        debug([label, "State: #{to_s(s)}", "Actions:"] ++ acts)
     end
 
     result

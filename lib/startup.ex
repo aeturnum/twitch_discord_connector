@@ -2,7 +2,7 @@ defmodule TwitchDiscordConnector.Startup do
   alias TwitchDiscordConnector.Event
   alias TwitchDiscordConnector.Startup
   alias TwitchDiscordConnector.Template.Src
-  alias TwitchDiscordConnector.Util.L
+  # alias TwitchDiscordConnector.Util.L
   alias TwitchDiscordConnector.Template.SrcServer
 
   use Stenotype

@@ -51,23 +51,23 @@ defmodule TwitchDiscordConnector.Template do
 
   @spec collect_result({Task.t(), map()}, map()) :: map()
   defp collect_result({task, nil}, results) do
-        L.e("Task timed out!")
-        Task.shutdown(task, :brutal_kill)
-        results
+    L.e("Task timed out!")
+    Task.shutdown(task, :brutal_kill)
+    results
   end
 
-  defp collect_result({task, {:exit, reason}}, results) do
-        L.e("Task failed: #{inspect(reason)}")
-        results
+  defp collect_result({_task, {:exit, reason}}, results) do
+    L.e("Task failed: #{inspect(reason)}")
+    results
   end
 
-  defp collect_result({task, {:ok, {name, {:ok, value}}}}, results) do
-        Map.put(results, name, H.unwrap?(value, :ok))
+  defp collect_result({_task, {:ok, {name, {:ok, value}}}}, results) do
+    Map.put(results, name, H.unwrap?(value, :ok))
   end
 
-  defp collect_result({task, {:ok, {name, {:error, value}}}}, results) do
-        L.e("Task #{name} succeded but had internal error: #{inspect(value)}")
-        results
+  defp collect_result({_task, {:ok, {name, {:error, value}}}}, results) do
+    L.e("Task #{name} succeded but had internal error: #{inspect(value)}")
+    results
   end
 
   @spec do_calls(map(), map(), non_neg_integer()) :: map()

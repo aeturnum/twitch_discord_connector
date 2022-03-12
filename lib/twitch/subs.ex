@@ -5,7 +5,7 @@ defmodule TwitchDiscordConnector.Twitch.Subs do
   Todo: record if a subscription is confirmed.
   """
   alias TwitchDiscordConnector.Twitch.Common
-  alias TwitchDiscordConnector.Util.Expires
+  # alias TwitchDiscordConnector.Util.Expires
   alias TwitchDiscordConnector.JsonDB.TwitchUserDB
 
   # new flow probably:
